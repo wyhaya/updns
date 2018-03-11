@@ -1,0 +1,20 @@
+
+
+language: node_js
+
+sudo: true
+
+node_js:
+  - 8
+  - 9
+
+os:
+  - linux
+  - osx
+
+cache:
+  yarn: true
+  directories:
+    - node_modules
+
+

@@ -1,0 +1,141 @@
+#!/usr/bin/env node
+
+
+const daemon = require('./../lib/daemon')
+const EventEmitter = require('events').EventEmitter
+const path = require('path')
+const fs = require('fs')
+const command = new EventEmitter()
+const pidConfigPath = path.join(__dirname, './../config/updns.temp.pid.txt')
+
+
+command.on('start', () => {
+
+    let updns = daemon.createProcess(path.join(__dirname, './index'))
+
+    updns.on('message', message => {
+
+        if(message.state === 1){
+
+            fs.writeFileSync(pidConfigPath, updns.pid)
+            process.exit(0)
+
+        }else {
+
+            console.log(`\x1b[31mupdns: ${message.message}\x1b[0m`)
+
+        }
+
+    })
+
+})
+
+
+command.on('stop', over => {
+
+    fs.readFile(pidConfigPath,{
+        encoding: 'utf-8'
+    },(err, pid) => {
+
+        if (err || !pid) {
+
+            console.log('\x1b[31mupdns: Please start the DNS service first \'sudo updns start\'\x1b[0m')
+
+        } else {
+
+            try {
+                // Does the process exist ?
+                process.kill(pid, 0)
+
+                try {
+                    
+                    daemon.killProcess(pid)
+                    fs.unlinkSync(pidConfigPath)
+                    over &&
+                        over()
+
+                }catch(env) {
+                    error(env)
+                }
+
+            }catch(env) {
+                error(env)
+            }
+
+        }
+    })
+
+    function error(e) {
+
+        if(e.code === 'ESRCH'){
+
+            console.log('\x1b[31mupdns: Can\'t find the service that is running\x1b[0m')
+
+        }else if(e.code === 'EPERM'){
+            
+            console.log('\x1b[31mupdns: Please make sure that you have sufficient authority, Or use \'sudo updns stop\'\x1b[0m')
+
+        }else {
+
+            console.log(`\x1b[31mupdns: ${e.code}\x1b[0m`)
+            
+        }
+
+    }
+
+})
+
+
+command.on('reload', () => {
+
+    command.emit('stop',() => command.emit('start'))
+
+})
+
+
+command.on('-v', () => {
+
+    let version = JSON.parse(
+        fs.readFileSync(
+            path.join(__dirname,'./../package.json'), 'utf-8'
+        )
+    ).version
+
+    console.log(`updns: version/${version}`)
+
+})
+
+
+command.on('path', () => {
+
+    console.log(`updns: ${path.join(__dirname, './../')}`)
+
+})
+
+
+command.on('error', () => {
+
+    console.log(`
+\x1b[31mupdns: Can't find the command\x1b[0m
+
+updns [Options]
+
+Options: 
+
+| Command          | Explain                             |
+| -------------    | -------------                       |
+| 'start'          | Start the DNS service               |
+| 'stop'           | Stop the DNS services               |
+| 'reload'         | Reload the hosts configuration file |
+| 'path'           | View the installation directory     |
+| '-v'             | View version                        |
+`)
+
+})
+
+
+command.listenerCount(process.argv[2]) ?
+    command.emit(process.argv[2]) :
+    command.emit('error')
+
+

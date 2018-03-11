@@ -1,0 +1,40 @@
+{
+  "name": "updns",
+  "version": "1.1.0",
+  "description": "DNS proxy tools developed with node, you can intercept any domain name and return any ip you need",
+  "main": "index.js",
+  "scripts": {
+    "start": "./bin/updns start",
+    "stop": "./bin/updns stop",
+    "reload": "./bin/updns reload",
+    "test": "ava ./test/",
+    "lint": "eslint --ext .js ./bin/updns ./",
+    "fix": "yarn lint --fix"
+  },
+  "bin": {
+    "updns": "./bin/updns"
+  },
+  "devDependencies": {
+    "ava": "^0.24.0",
+    "eslint": "^4.14.0"
+  },
+  "engines": {
+    "node": ">=8.0.0"
+  },
+  "keywords": [
+    "dns",
+    "node",
+    "proxy",
+    "dns-proxy",
+    "dns-server"
+  ],
+  "bugs": {
+    "url": "https://github.com/wyhaya/updns/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wyhaya/updns.git"
+  },
+  "author": "wyhaya <wyhaya@gmail.com>",
+  "license": "MIT"
+}
