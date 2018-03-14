@@ -1,6 +1,5 @@
 
 
-const net = require('net')
 const path = require('path')
 const EventEmitter = require('events').EventEmitter
 const hostsConfigPath = path.join(__dirname, './../config/hosts')
@@ -18,17 +17,19 @@ const hosts
                 return false
             }
 
-            let proxyReg = /^\s*proxy\s+([\d{1-3]+(\.[\d{1-3}]){3})(\s*|\s+#.*)+$/
-            if(proxyReg.test(host) && net.isIP(host.match(proxyReg)[1])){
+            // proxy    8.8.8.8    # proxy => ip
+            let proxyReg = /^\s*proxy\s+((\d{1,2}|1\d\d|2[0-4]\d|25[0-5])(\.(\d{1,2}|1\d\d|2[0-4]\d|25[0-5])){3})(\s*|\s+#.*)$/
+            if(proxyReg.test(host)){
                 proxy.push(host.match(proxyReg)[1])
                 return false
             }
 
-            let hostReg = /^\s*(\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})\s+([(\w|\-)]+(\.[a-z]+)+)(\s*|\s+#.*)+$/
-            if(hostReg.test(host) && net.isIP(host.match(hostReg)[1])) {
+            // google.com    8.8.8.8    # domain => ip
+            let hostReg = /^\s*([(\w|\-)]+(\.[a-z]+)+)\s+((\d{1,2}|1\d\d|2[0-4]\d|25[0-5])(\.(\d{1,2}|1\d\d|2[0-4]\d|25[0-5])){3})(\s*|\s+#.*)+$/
+            if(hostReg.test(host)) {
                 return {
-                    ip: host.match(hostReg)[1],
-                    domain: host.match(hostReg)[2]
+                    ip: host.match(hostReg)[3],
+                    domain: host.match(hostReg)[1]
                 }
             }
 

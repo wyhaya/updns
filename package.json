@@ -1,6 +1,6 @@
 {
   "name": "updns",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "DNS proxy tools developed with node, you can intercept any domain name and return any ip you need",
   "main": "index.js",
   "scripts": {

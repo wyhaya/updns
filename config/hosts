@@ -1,8 +1,8 @@
 
 
-proxy      8.8.8.8      # proxy => DNS Server
+proxy           8.8.8.8    # proxy => DNS Server
 
-# 1.1.1.1  google.com   # domain => IP
-# 2.2.2.2  baidu.com
-# 3.3.3.3  yahoo.com
+# google.com    1.1.1.1    # domain => IP
+# yahoo.com     2.2.2.2
+
 

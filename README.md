@@ -21,9 +21,9 @@ We configure routing in the way of hosts
 You need to find the installation path of the module first and configure it in `config/hosts`
 
 ```
-proxy      8.8.8.8
-1.1.1.1    google.com
-2.2.2.2    yahoo.com
+proxy         8.8.8.8    # Proxy => DNS Server
+google.com    1.1.1.1    # Domain => IP
+yahoo.com     2.2.2.2
 ```
 #### Start to use
 ```
