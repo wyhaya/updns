@@ -5,7 +5,7 @@ const child_process = require('child_process')
 
 module.exports.createProcess = filePath => {
 
-    let argvs = process.argv.filter((arg, i) => i !== 0)
+    let argvs = [...process.argv].slice(1, process.argv.length)
 
     let options = {
         stdio: 'ignore',
@@ -27,4 +27,5 @@ module.exports.killProcess = pid => {
     process.kill(pid)
 
 }
+
 

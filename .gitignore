@@ -6,3 +6,4 @@ dist/
 *.log
 package-lock.json
 *.txt
+yarn.lock

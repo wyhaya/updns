@@ -3,13 +3,13 @@
 const test = require('ava')
 const fs = require('fs')
 const path = require('path')
-const daemon = require('./../lib/daemon')
+const daemon = require('./../bin/daemon')
 
 test.cb('Creating a daemon', t => {
 
     t.plan(2)
 
-    const testFilePath = path.join(__dirname,'./process.test.js')
+    const testFilePath = path.join(__dirname, './process.test.js')
 
     fs.writeFileSync(testFilePath,`
         process.send({

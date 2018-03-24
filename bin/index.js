@@ -79,10 +79,12 @@ updns.on('listening', () => {
 
 
 updns.on('message',(domain, send, proxyTo) => {
+
     if(domainEvent.listenerCount(domain)) {
-        domainEvent.emit(domain,send)
+        domainEvent.emit(domain, send)
     }else {
         proxyTo(proxy[0])
     }
+    
 })
 

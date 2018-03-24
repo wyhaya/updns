@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 
 
-const daemon = require('./../lib/daemon')
-const EventEmitter = require('events').EventEmitter
-const path = require('path')
 const fs = require('fs')
-const command = new EventEmitter()
+const path = require('path')
+const daemon = require('./daemon')
+const EventEmitter = require('events').EventEmitter
 const pidConfigPath = path.join(__dirname, './../config/updns.temp.pid.txt')
+
+const command = new EventEmitter()
 
 
 command.on('start', () => {
