@@ -4,6 +4,7 @@
   "description": "DNS proxy tools developed with node, you can intercept any domain name and return any ip you need",
   "main": "index.js",
   "scripts": {
+    "dev": "sudo yarn start develop",
     "start": "./bin/updns start",
     "stop": "./bin/updns stop",
     "reload": "./bin/updns reload",

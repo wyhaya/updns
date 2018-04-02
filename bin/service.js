@@ -1,6 +1,7 @@
 
 
 const path = require('path')
+const writeLog = require('./log')
 const EventEmitter = require('events').EventEmitter
 const hostsConfigPath = path.join(__dirname, './../config/hosts')
 
@@ -78,13 +79,16 @@ updns.on('listening', () => {
 })
 
 
-updns.on('message',(domain, send, proxyTo) => {
+updns.on('message', (domain, send, proxyTo) => {
 
     if(domainEvent.listenerCount(domain)) {
         domainEvent.emit(domain, send)
     }else {
         proxyTo(proxy[0])
     }
+
+    writeLog(domain)
     
 })
+
 

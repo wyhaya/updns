@@ -12,18 +12,27 @@ const command = new EventEmitter()
 
 command.on('start', () => {
 
-    let updns = daemon.createProcess(path.join(__dirname, './index'))
+    let updns = daemon.createProcess(path.join(__dirname, './service'))
 
     updns.on('message', message => {
 
-        if(message.state === 1){
+        if(process.argv[3] === 'develop'){
 
-            fs.writeFileSync(pidConfigPath, updns.pid)
-            process.exit(0)
+            console.log(message.message)
 
         }else {
 
-            console.log(`\x1b[31mupdns: ${message.message}\x1b[0m`)
+            if(message.state === 1){
+
+                fs.writeFileSync(pidConfigPath, updns.pid)
+                
+                process.exit(0)
+    
+            }else {
+    
+                console.log(`\x1b[31mupdns: ${message.message}\x1b[0m`)
+    
+            }
 
         }
 
@@ -35,7 +44,7 @@ command.on('start', () => {
 command.on('stop', over => {
 
     fs.readFile(pidConfigPath,{
-        encoding: 'utf-8'
+        encoding: 'utf8'
     },(err, pid) => {
 
         if (err || !pid) {
