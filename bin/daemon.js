@@ -22,9 +22,29 @@ module.exports.createProcess = filePath => {
 
 }
 
+
 module.exports.killProcess = pid => {
 
     process.kill(pid)
+
+}
+
+
+module.exports.spawn = (processName, argv) => {
+
+    return new Promise((suc, err) => {
+
+        const child = child_process.spawn(processName, [ argv ], {
+            stdio: 'inherit'
+        })
+
+        child.on('error', err)
+
+        child.on('exit', (code, signal) => {
+            code === 0 ? suc(child) : err(signal)
+        })
+
+    })
 
 }
 

@@ -116,9 +116,26 @@ command.on('-v', () => {
 })
 
 
-command.on('path', () => {
+command.on('config', () => {
 
-    console.log(`updns: ${path.join(__dirname, './../')}`)
+    const editor = process.env.EDITOR || 'vi'
+
+    daemon.spawn(editor, path.join(__dirname, '../config/hosts')).catch(() => {
+
+        console.log(`\x1b[31mPlease manually modify the configuration file: ${path.join(__dirname, './../')}config/hosts\x1b[0m`)
+
+    })
+
+})
+
+
+command.on('log', () => {
+    
+    daemon.spawn('less', path.join(__dirname, '../log/updns.log')).catch(err => {
+        if(err === null){
+            console.log('\x1b[31mupdns: Cannot open log file\x1b[0m')
+        }else throw err
+    })
 
 })
 
@@ -132,13 +149,14 @@ updns [Options]
 
 Options: 
 
-| Command          | Explain                             |
-| -------------    | -------------                       |
-| 'start'          | Start the DNS service               |
-| 'stop'           | Stop the DNS services               |
-| 'reload'         | Reload the hosts configuration file |
-| 'path'           | View the installation directory     |
-| '-v'             | View version                        |
+| Command          | Explain                                 |
+| -------------    | -------------                           |
+| 'start'          | Start the DNS service                   |
+| 'stop'           | Stop the DNS services                   |
+| 'config'         | Using VI to edit the configuration file |
+| 'reload'         | Reload the hosts configuration file     |
+| 'log'            | Using less to view log files            |
+| '-v'             | View version                            |
 `)
 
 })
