@@ -18,7 +18,7 @@ npm install -g updns
 
 We configure routing in the way of hosts
 
-You need to find the installation path of the module first and configure it in `config/hosts`
+You can use `updns config` command and then call `vim` quick edit, or find the module's installation directory and edit the `config/hosts` file
 
 ```
 proxy         8.8.8.8    # Proxy => DNS Server
@@ -35,14 +35,14 @@ Now change your local DNS server to `127.0.0.1` 🚀
 
 #### Other
 
-| Command          | Explain                                 |
-| -------------    | -------------                           |
-| `updns start`    | Start the DNS service                   |
-| `updns stop`     | Stop the DNS services                   |
-| `updns config`   | Using VI to edit the configuration file |
-| `updns reload`   | Reload the hosts configuration file     |
-| `updns log`      | Using less to view log files            |
-| `updns -v`       | View version                            |
+| Command          | Explain                                    |
+| -------------    | -------------                              |
+| `updns start`    | Start the DNS service                      |
+| `updns stop`     | Stop the DNS services                      |
+| `updns config`   | Using `vim` to edit the configuration file |
+| `updns reload`   | Reload the hosts configuration file        |
+| `updns log`      | Using `less` to view log files             |
+| `updns -v`       | View version                               |
 
 
 ## Create DNS Server

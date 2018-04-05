@@ -5,6 +5,7 @@ const fs = require('fs')
 const path = require('path')
 const daemon = require('./../bin/daemon')
 
+
 test.cb('Creating a daemon', t => {
 
     t.plan(2)
@@ -32,5 +33,20 @@ test.cb('Creating a daemon', t => {
     
 
 })
+
+
+test.todo('Spawn process')
+
+// test.cb('Spawn process', t => {
+
+//     t.plan(1)
+//     daemon.spawn('vim', path.join(__dirname, './index.test.js')).then(child => {
+//         console.log(child)
+//         t.end()
+//     }).catch(e => {
+
+//     })
+    
+// })
 
 
