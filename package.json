@@ -1,6 +1,6 @@
 {
   "name": "updns",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "DNS proxy tools developed with node, you can intercept any domain name and return any ip you need",
   "main": "index.js",
   "scripts": {
@@ -11,7 +11,7 @@
     "reload": "./bin/updns reload",
     "log": "./bin/updns log",
     "version": "./bin/updns -v",
-    "test": "ava ./test/",
+    "test": "ava ./test/ --verbose",
     "lint": "eslint --ext .js ./bin/updns ./",
     "fix": "yarn lint --fix"
   },

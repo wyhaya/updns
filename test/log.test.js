@@ -9,32 +9,31 @@ const logPath = path.join(__dirname, './../log/updns.log')
 
 test('Write log', async t => {
 
-    writeLog(1)
+    writeLog(Date.now())
 
-    await setTimeout(() => {
-        writeLog(2)
-    }, 10)
+    await new Promise(waiting => setTimeout(() => {
+        for(let i = 0; i < 8; i++){
+            writeLog(Date.now())
+        }
+        waiting()
+    }, 10))
 
-    const logs = new Promise((success, fail) => {
+    const logs = new Promise((success, fail) => setTimeout(() => {
 
-        setTimeout(() => {
+        fs.readFile(logPath, {
+            encoding: 'utf8'
+        }, (err, content) => {
 
-            fs.readFile(logPath, {
-                encoding: 'utf8'
-            },(err, content) => {
-    
-                if(err) fail()
-                else success(content.split('\n').length)
+            fs.unlinkSync(logPath)
 
-                fs.unlinkSync(logPath)
-    
-            })
+            if (err) fail()
+            else success(content.split('\n').length)
 
-        }, 100)
+        })
 
-    })
+    }, 100))
 
-    t.is(await logs, 3)
+    t.is(await logs, 10)
 
 })
 

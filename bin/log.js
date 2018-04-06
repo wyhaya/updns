@@ -12,7 +12,7 @@ function write(log) {
     }, err => {
 
         if(err && err.code === 'ENOENT'){
-
+            return
         }
 
     })
@@ -24,7 +24,7 @@ module.exports = (domain) => {
 
     const log = `${new Date().toString()}    ${domain}\n`
 
-    fs.stat(path.join(__dirname, './../log'), (err, stat) => {
+    fs.stat(path.join(__dirname, './../log'), err => {
 
         if(err && err.code === 'ENOENT'){
             fs.mkdir(
