@@ -1,7 +1,8 @@
 env:
   es6: true
   node: true
-extends: 'eslint:recommended'
+extends: 
+  - eslint:recommended
 parserOptions:
   sourceType: module
 rules:
@@ -17,5 +18,24 @@ rules:
   semi:
     - error
     - never
+  comma-spacing:
+    - error
+    - 
+      before: false
+      after: true 
+  space-infix-ops:
+    - error
+    - 
+      int32Hint: false
+  key-spacing:
+    - error
+    - 
+      afterColon: true
+  eqeqeq:
+    - error
+    - allow-null
   no-console:
-    - off
+    - error
+    -
+      allow:
+        - log

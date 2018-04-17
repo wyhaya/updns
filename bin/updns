@@ -45,7 +45,7 @@ command.on('stop', over => {
 
     fs.readFile(pidConfigPath, {
         encoding: 'utf8'
-    },(err, pid) => {
+    }, (err, pid) => {
 
         if (err || !pid) {
 
@@ -98,7 +98,7 @@ command.on('stop', over => {
 
 command.on('reload', () => {
 
-    command.emit('stop',() => command.emit('start'))
+    command.emit('stop', () => command.emit('start'))
 
 })
 
@@ -107,7 +107,7 @@ command.on('-v', () => {
 
     let version = JSON.parse(
         fs.readFileSync(
-            path.join(__dirname,'./../package.json'), 'utf-8'
+            path.join(__dirname, './../package.json'), 'utf-8'
         )
     ).version
 

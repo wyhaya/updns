@@ -18,8 +18,11 @@ cache:
     - node_modules
 
 script:
-  - yarn run test
+  # - yarn lint
   - yarn run version
-  - sudo yarn run start && sudo yarn run reload && sudo yarn run stop
+  - yarn run test
+  # - sudo yarn run start
+  # - sudo yarn run reload
+  # - sudo yarn run stop
 
 

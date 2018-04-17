@@ -2,7 +2,7 @@
 
 # updns
 
-[![Build Status](https://img.shields.io/travis/wyhaya/updns.svg)](https://travis-ci.org/wyhaya/updns) [![download](https://img.shields.io/npm/dt/updns.svg)](https://www.npmjs.com/package/updns) ![node](https://img.shields.io/node/v/updns.svg) [![license](https://img.shields.io/npm/l/updns.svg)](./LICENSE) [![codebeat](https://codebeat.co/badges/166a4edb-25e0-498b-9ac0-39e0b4daaffb)](https://codebeat.co/projects/github-com-wyhaya-updns-master) ![npm version](https://img.shields.io/npm/v/updns.svg)
+[![Build Status](https://img.shields.io/travis/wyhaya/updns.svg)](https://travis-ci.org/wyhaya/updns) [![Download](https://img.shields.io/npm/dt/updns.svg)](https://www.npmjs.com/package/updns) ![npm version](https://badge.fury.io/js/updns.svg) ![node](https://img.shields.io/node/v/updns.svg) [![License](https://img.shields.io/npm/l/updns.svg)](./LICENSE) [![codebeat](https://codebeat.co/badges/166a4edb-25e0-498b-9ac0-39e0b4daaffb)](https://codebeat.co/projects/github-com-wyhaya-updns-master)
 
 ---
 
@@ -53,12 +53,12 @@ npm install updns
 ```javascript
 const updns = require('updns').createServer(53)
 
-updns.on('error', err => {
-    console.log('There is a mistake')
+updns.on('error', error => {
+    console.log(error)
 })
 
 updns.on('listening', server => {
-    console.log('The DNS server has been started')
+    console.log('DNS service has started')
 })
 
 updns.on('message', (domain, send, proxy) => {

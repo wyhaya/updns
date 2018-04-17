@@ -12,7 +12,7 @@ test.cb('Creating a daemon', t => {
 
     const testFilePath = path.join(__dirname, './process.test.js')
 
-    fs.writeFileSync(testFilePath,`
+    fs.writeFileSync(testFilePath, `
         process.send({
             message: 'ok'
         })

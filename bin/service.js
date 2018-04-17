@@ -64,7 +64,7 @@ hosts.forEach(host => {
 })
 
 
-updns.on('error',err => {
+updns.on('error', err => {
     process.send({
         state: 0, 
         message: err.toString()
