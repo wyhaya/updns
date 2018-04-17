@@ -2,8 +2,6 @@
 .idea/
 .cache/
 node_modules/
-dist/
 *.log
 package-lock.json
 *.txt
-yarn.lock
