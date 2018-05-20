@@ -7,6 +7,7 @@ sudo: true
 node_js:
   - 8
   - 9
+  - 10
 
 os:
   - linux
@@ -18,11 +19,21 @@ cache:
     - node_modules
 
 script:
-  - yarn lint
-  - yarn run version
-  - yarn run test
-  # - sudo yarn run start
-  # - sudo yarn run reload
-  # - sudo yarn run stop
+  # eslint
+  - ./node_modules/.bin/eslint --ext .js ./bin/updns ./
+  # ava test
+  - ./node_modules/.bin/ava ./test/ --verbose
+  # installation directory
+  - ./bin/updns path
+  # version
+  - ./bin/updns version
+  # help
+  - ./bin/updns error
+  # 
+  # - sudo ./bin/updns start
+  # - sudo ./bin/updns reload
+  # - sudo ./bin/updns stop
+  # - ./bin/updns config
+  # - ./bin/updns log
 
 

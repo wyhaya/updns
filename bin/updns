@@ -103,7 +103,7 @@ command.on('reload', () => {
 })
 
 
-command.on('-v', () => {
+command.on('version', () => {
 
     let version = JSON.parse(
         fs.readFileSync(
@@ -140,6 +140,13 @@ command.on('log', () => {
 })
 
 
+command.on('path', () => {
+
+    console.log(`updns: ${path.join(__dirname, '../')}`)
+
+})
+
+
 command.on('error', () => {
 
     console.log(`
@@ -149,14 +156,15 @@ updns [Options]
 
 Options: 
 
-| Command          | Explain                                  |
-| -------------    | -------------                            |
-| 'start'          | Start the DNS service                    |
-| 'stop'           | Stop the DNS services                    |
-| 'config'         | Using vim to edit the configuration file |
-| 'reload'         | Reload the hosts configuration file      |
-| 'log'            | Using less to view log files             |
-| '-v'             | View version                             |
+| Command          | Explain                                     |
+| -------------    | -------------                               |
+| 'start'          | Start the DNS service                       |
+| 'stop'           | Stop the DNS services                       |
+| 'config'         | Using vim to edit the configuration file    |
+| 'reload'         | Reload the hosts configuration file         |
+| 'log'            | Using less to view log files                |
+| 'path'           | Display the installation directory of updns |
+| 'version'        | View version                                |
 `)
 
 })

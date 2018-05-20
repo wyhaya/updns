@@ -1,19 +1,12 @@
 {
   "name": "updns",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "DNS proxy tools developed with node, you can intercept any domain name and return any ip you need",
   "main": "index.js",
   "scripts": {
     "dev": "sudo ./bin/updns start develop",
-    "start": "./bin/updns start",
-    "stop": "./bin/updns stop",
-    "config": "./bin/updns config",
-    "reload": "./bin/updns reload",
-    "log": "./bin/updns log",
-    "version": "./bin/updns -v",
     "test": "ava ./test/ --verbose",
-    "lint": "eslint --ext .js ./bin/updns ./",
-    "fix": "yarn lint --fix"
+    "fix": "eslint --ext .js ./bin/updns ./ --fix"
   },
   "bin": {
     "updns": "./bin/updns"
