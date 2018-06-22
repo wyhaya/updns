@@ -35,6 +35,8 @@ rules:
   eqeqeq:
     - error
     - allow-null
+  no-useless-escape:
+    - off
   no-console:
     - error
     -

@@ -11,7 +11,7 @@ var bind = {
     port: 53
 }
 const proxy = []
-// eslint-disable-next-line no-useless-escape
+
 const meta = new RegExp('\/(.*)\/')  // regex to find regex (the slashes are escaped on purpose because we're matching the regex markings themselves)
 var hosts
 
