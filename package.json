@@ -1,7 +1,7 @@
 {
   "name": "updns",
   "version": "1.2.1",
-  "description": "DNS proxy tools developed with node, you can intercept any domain name and return any ip you need",
+  "description": "DNS proxy tools, you can intercept any domain name and return any ip you need",
   "main": "index.js",
   "scripts": {
     "dev": "sudo ./bin/updns start develop",

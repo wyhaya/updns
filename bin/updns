@@ -5,7 +5,7 @@ const fs = require('fs')
 const path = require('path')
 const daemon = require('./daemon')
 const EventEmitter = require('events').EventEmitter
-const pidConfigPath = path.join(__dirname, './../config/updns.temp.pid.txt')
+const pidConfigPath = path.join(__dirname, './../config/updns.pid')
 
 const command = new EventEmitter()
 
