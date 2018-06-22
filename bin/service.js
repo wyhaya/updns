@@ -22,6 +22,15 @@ const hosts
                 return false
             }
 
+            // bind    127.0.0.3:53    # listen-address : port
+            let bindReg = /^bind\s+((?:25[0-5]|2[0-4]\d|1\d\d|\d{1,2})(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|\d{1,2})){3})(?::(\d{1,5}))?\s*#?.*$/
+            let binding = bindReg.exec(host)
+            if(binding){
+              bind.address = (binding[1] === '0.0.0.0') ? null : binding[1]
+              bind.port = (binding[2] <= 65535) ? binding[2] : bind.port
+              return false
+            }
+
             // proxy    8.8.8.8    # proxy => ip
             let proxyReg = /^\s*proxy\s+((\d{1,2}|1\d\d|2[0-4]\d|25[0-5])(\.(\d{1,2}|1\d\d|2[0-4]\d|25[0-5])){3})(\s*|\s+#.*)$/
             if(proxyReg.test(host)){
