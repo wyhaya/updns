@@ -6,5 +6,5 @@ proxy               8.8.8.8        # proxy => DNS Server
 # google.com        1.1.1.1        # domain => IP
 # yahoo.com         2.2.2.2
 
-# /goo+gle\.com/    127.99.99.99   # regex: anything.gooooooooooogle.com => IP
+# /goo+gle-\.com/   3.3.3.3        # regex: gooooooooooogle.com => IP
 
