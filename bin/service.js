@@ -28,6 +28,7 @@ const hosts
             if(binding){
               bind.address = (binding[1] === '0.0.0.0') ? null : binding[1]
               bind.port = (binding[2] <= 65535) ? binding[2] : bind.port
+              writeLog(`Updns has bound to interface ${bind.address || '0.0.0.0(ANY/ALL)'} on port ${bind.port}`)
               return false
             }
 
