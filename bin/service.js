@@ -2,20 +2,17 @@
 
 const fs = require('fs')
 const path = require('path')
-<<<<<<< HEAD
 const log = require('./log')
-const EventEmitter = require('events').EventEmitter
-=======
-const writeLog = require('./log')
->>>>>>> watch the hosts file, removed EventEmitter (events were stale)
 const hostsConfigPath = path.join(__dirname, './../config/hosts')
 
 
 var bind = {
-  address: null,
-  port: 53
+    address: null,
+    port: 53
 }
 const proxy = []
+// eslint-disable-next-line no-useless-escape
+const meta = new RegExp('\/(.*)\/')  // regex to find regex (the slashes are escaped on purpose because we're matching the regex markings themselves)
 var hosts
 
 function updateHosts () {
@@ -32,10 +29,10 @@ function updateHosts () {
             let bindReg = /^\s*bind\s+((?:25[0-5]|2[0-4]\d|1\d\d|\d{1,2})(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|\d{1,2})){3})(?::(\d{1,5}))?\s*#?.*$/
             let binding = bindReg.exec(host)
             if(binding){
-              bind.address = (binding[1] === '0.0.0.0') ? null : binding[1]
-              bind.port = (binding[2] <= 65535) ? binding[2] : bind.port
-              writeLog(`Updns has bound to interface ${bind.address || '0.0.0.0(ANY/ALL)'} on port ${bind.port}`)
-              return false
+                bind.address = (binding[1] === '0.0.0.0') ? null : binding[1]
+                bind.port = (binding[2] <= 65535) ? binding[2] : bind.port
+                log.write(`Updns has bound to interface ${bind.address || '0.0.0.0(ANY/ALL)'} on port ${bind.port}`)
+                return false
             }
 
             // proxy    8.8.8.8    # proxy => ip
@@ -46,12 +43,32 @@ function updateHosts () {
             }
 
             // google.com    8.8.8.8    # domain => ip
-            let hostReg = /^\s*([(\w|\-)]+(\.[a-z]+)+)\s+((\d{1,2}|1\d\d|2[0-4]\d|25[0-5])(\.(\d{1,2}|1\d\d|2[0-4]\d|25[0-5])){3})(\s*|\s+#.*)+$/
-            if(hostReg.test(host)) {
-                return {
-                    ip: host.match(hostReg)[3],
-                    domain: host.match(hostReg)[1]
-                }
+            // check for a valid hostname (per RFC 1034)
+            // first character is a letter, middle is letters/digits/hyphens, last character is a letter or digit
+            // each section must be 63 characters or less in length, with the entire domain no greater than 253
+            // 253 bytes for the textual name, plus the trailing '.', and another byte to record the length = 255 max
+            // https://tools.ietf.org/html/rfc1034#section-3.5
+            let hostReg = /^((?:[a-z]+[a-z|0-9|-]{0,61}[a-z|0-9]\.)+[(a-z)]+)$/i
+            let ipReg = /^((?:\d{1,2}|1\d\d|2[0-4]\d|25[0-5])(?:\.(?:\d{1,2}|1\d\d|2[0-4]\d|25[0-5])){3})$/ // matches a valid ip
+
+            let rowParts = host.trim().replace(/\s\s+/g, ' ').split(' ')
+            if (rowParts.length < 2) return false // must specify a domain and ip
+
+            // /(.*\.)?goo+gle?\.(?:com|net|org)/    127.0.0.1    # dyanmic-domain (eg: gooooooooooooooogle.com) => ip
+            let customRegEx = meta.exec(rowParts[0]) // allow the user to specify their own regex for dynamic matching
+            let theHost
+
+            if (customRegEx) {
+                theHost = new RegExp(customRegEx[1], 'i')
+            }  else if (rowParts[0].length <= 253) {
+                if (hostReg.test(rowParts[0])) theHost = rowParts[0]
+            }
+
+            let theIP = ipReg.exec(rowParts[1]) ? rowParts[1] : false // check for a valid IP address
+
+            if(theHost && theIP) return {
+                ip: theIP,
+                domain: theHost
             }
 
             return false
@@ -95,27 +112,23 @@ updns.on('listening', () => {
 
 
 updns.on('message', (domain, send, proxyTo) => {
-  let matchFound = false
+    let matchFound = false
 
-  hosts.some(host => {
-    if (domain.match(host.domain)) {
-      matchFound = host.ip
-      return true
+    hosts.some(host => {
+        if (domain.match(host.domain)) {
+            matchFound = host.ip
+            return true
+        }
+    })
+
+    if(matchFound){
+        send(matchFound)
+    }else {
+        proxyTo(proxy[0])
     }
-  })
 
-  if(matchFound){
-    send(matchFound)
-  }else {
-    proxyTo(proxy[0])
-  }
-
-<<<<<<< HEAD
     log.write(domain)
-    
-=======
-  writeLog(domain)
->>>>>>> watch the hosts file, removed EventEmitter (events were stale)
+
 })
 
 
