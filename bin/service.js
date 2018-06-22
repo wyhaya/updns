@@ -15,6 +15,18 @@ const proxy = []
 const meta = new RegExp('\/(.*)\/')  // regex to find regex (the slashes are escaped on purpose because we're matching the regex markings themselves)
 var hosts
 
+function validateDomain (dom, ipaddr) {
+    // google.com    8.8.8.8    # domain => ip
+    // check for a valid hostname (per RFC 1034)
+    // first character is a letter, middle is letters/digits/hyphens, last character is a letter or digit
+    // each section must be 63 characters or less in length, with the entire domain no greater than 253
+    // 253 bytes for the textual name, plus the trailing '.', and another byte to record the length = 255 max
+    // https://tools.ietf.org/html/rfc1034#section-3.5
+    let hostReg = /^((?:[a-z]+[a-z|0-9|-]{0,61}[a-z|0-9]\.)+[(a-z)]+)$/i
+
+    return (dom.length <= 253 && hostReg.test(dom)) ? (ipaddr || dom) : false
+}
+
 function updateHosts () {
     hosts = fs
         .readFileSync(hostsConfigPath, 'utf-8')
@@ -42,13 +54,6 @@ function updateHosts () {
                 return false
             }
 
-            // google.com    8.8.8.8    # domain => ip
-            // check for a valid hostname (per RFC 1034)
-            // first character is a letter, middle is letters/digits/hyphens, last character is a letter or digit
-            // each section must be 63 characters or less in length, with the entire domain no greater than 253
-            // 253 bytes for the textual name, plus the trailing '.', and another byte to record the length = 255 max
-            // https://tools.ietf.org/html/rfc1034#section-3.5
-            let hostReg = /^((?:[a-z]+[a-z|0-9|-]{0,61}[a-z|0-9]\.)+[(a-z)]+)$/i
             let ipReg = /^((?:\d{1,2}|1\d\d|2[0-4]\d|25[0-5])(?:\.(?:\d{1,2}|1\d\d|2[0-4]\d|25[0-5])){3})$/ // matches a valid ip
 
             let rowParts = host.trim().replace(/\s\s+/g, ' ').split(' ')
@@ -56,13 +61,7 @@ function updateHosts () {
 
             // /(.*\.)?goo+gle?\.(?:com|net|org)/    127.0.0.1    # dyanmic-domain (eg: gooooooooooooooogle.com) => ip
             let customRegEx = meta.exec(rowParts[0]) // allow the user to specify their own regex for dynamic matching
-            let theHost
-
-            if (customRegEx) {
-                theHost = new RegExp(customRegEx[1], 'i')
-            }  else if (rowParts[0].length <= 253) {
-                if (hostReg.test(rowParts[0])) theHost = rowParts[0]
-            }
+            let theHost = customRegEx ? new RegExp(customRegEx[1], 'i') : validateDomain(rowParts[0])
 
             let theIP = ipReg.exec(rowParts[1]) ? rowParts[1] : false // check for a valid IP address
 
@@ -116,7 +115,7 @@ updns.on('message', (domain, send, proxyTo) => {
 
     hosts.some(host => {
         if (domain.match(host.domain)) {
-            matchFound = host.ip
+            matchFound = (typeof host.domain === 'object') ? validateDomain(domain, host.ip) : host.ip
             return true
         }
     })
