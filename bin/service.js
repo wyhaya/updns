@@ -23,7 +23,7 @@ const hosts
             }
 
             // bind    127.0.0.3:53    # listen-address : port
-            let bindReg = /^bind\s+((?:25[0-5]|2[0-4]\d|1\d\d|\d{1,2})(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|\d{1,2})){3})(?::(\d{1,5}))?\s*#?.*$/
+            let bindReg = /^\s*bind\s+((?:25[0-5]|2[0-4]\d|1\d\d|\d{1,2})(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|\d{1,2})){3})(?::(\d{1,5}))?\s*#?.*$/
             let binding = bindReg.exec(host)
             if(binding){
               bind.address = (binding[1] === '0.0.0.0') ? null : binding[1]
