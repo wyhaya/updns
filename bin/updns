@@ -8,33 +8,32 @@ const EventEmitter = require('events').EventEmitter
 const pidConfigPath = path.join(__dirname, './../config/updns.pid')
 
 const command = new EventEmitter()
+const isDevelop = process.argv[3] === 'develop'
 
 
 command.on('start', () => {
+
+    isDevelop && command.emit('stop')
 
     let updns = daemon.createProcess(path.join(__dirname, './service'))
 
     updns.on('message', message => {
 
-        if(process.argv[3] === 'develop'){
+        if(message.state === 1){
 
-            console.log(message.message)
-
-        }else {
-
-            if(message.state === 1){
-
-                fs.writeFileSync(pidConfigPath, updns.pid)
-                
+            fs.writeFileSync(pidConfigPath, updns.pid)
+            
+            isDevelop ? 
+                console.log(message.message) 
+                : 
                 process.exit(0)
     
-            }else {
+        }else {
     
-                console.log(`\x1b[31mupdns: ${message.message}\x1b[0m`)
+            console.log(`\x1b[31mupdns: ${message.message}\x1b[0m`)
     
-            }
-
         }
+
 
     })
 
