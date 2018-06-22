@@ -1,5 +1,6 @@
 
 
+bind            0.0.0.0:53 # IP => Port
 proxy           8.8.8.8    # proxy => DNS Server
 
 # google.com    1.1.1.1    # domain => IP
