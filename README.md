@@ -40,7 +40,7 @@ Now change your local DNS server to `127.0.0.1` 🚀
 | `updns start`    | Start the DNS service                         |
 | `updns stop`     | Stop the DNS services                         |
 | `updns config`   | Using `vim` to edit the configuration file    |
-| `updns reload`   | Reload the hosts configuration file           |
+| `updns restart`  | Restart the dns service                       |
 | `updns log`      | Using `less` to view log files                |
 | `updns path`     | Display the installation directory of `updns` |
 | `updns version`  | View version                                  |

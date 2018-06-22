@@ -95,7 +95,7 @@ command.on('stop', over => {
 })
 
 
-command.on('reload', () => {
+command.on('restart', () => {
 
     command.emit('stop', () => command.emit('start'))
 
@@ -160,7 +160,7 @@ Options:
 | 'start'          | Start the DNS service                       |
 | 'stop'           | Stop the DNS services                       |
 | 'config'         | Using vim to edit the configuration file    |
-| 'reload'         | Reload the hosts configuration file         |
+| 'restart'        | Restart the dns service                     |
 | 'log'            | Using less to view log files                |
 | 'path'           | Display the installation directory of updns |
 | 'version'        | View version                                |

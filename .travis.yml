@@ -31,7 +31,7 @@ script:
   - ./bin/updns error
   # 
   # - sudo ./bin/updns start
-  # - sudo ./bin/updns reload
+  # - sudo ./bin/updns restart
   # - sudo ./bin/updns stop
   # - ./bin/updns config
   # - ./bin/updns log
