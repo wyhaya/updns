@@ -58,7 +58,7 @@ Add a correct proxy address: "proxy 8.8.8.8"`
 }
 
 
-const updns = require('./../lib').createServer(53)
+const updns = require('./../lib').createServer(bind.port, bind.address)
 const domainEvent = new EventEmitter()
 
 hosts.forEach(host => {
