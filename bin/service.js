@@ -6,6 +6,10 @@ const EventEmitter = require('events').EventEmitter
 const hostsConfigPath = path.join(__dirname, './../config/hosts')
 
 
+var bind = {
+  address: null,
+  port: 53
+}
 const proxy = []
 const hosts
     =
