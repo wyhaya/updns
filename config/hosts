@@ -1,9 +1,10 @@
 
 
-bind            0.0.0.0:53 # IP => Port
-proxy           8.8.8.8    # proxy => DNS Server
+bind                0.0.0.0:53     # address => port
+proxy               8.8.8.8        # proxy => DNS Server
 
-# google.com    1.1.1.1    # domain => IP
-# yahoo.com     2.2.2.2
+# google.com        1.1.1.1        # domain => IP
+# yahoo.com         2.2.2.2
 
+# /goo+gle\.com/    127.99.99.99   # regex: anything.gooooooooooogle.com => IP
 
