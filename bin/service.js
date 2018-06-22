@@ -1,8 +1,13 @@
 
 
+const fs = require('fs')
 const path = require('path')
+<<<<<<< HEAD
 const log = require('./log')
 const EventEmitter = require('events').EventEmitter
+=======
+const writeLog = require('./log')
+>>>>>>> watch the hosts file, removed EventEmitter (events were stale)
 const hostsConfigPath = path.join(__dirname, './../config/hosts')
 
 
@@ -11,9 +16,10 @@ var bind = {
   port: 53
 }
 const proxy = []
-const hosts
-    =
-    require('fs')
+var hosts
+
+function updateHosts () {
+    hosts = fs
         .readFileSync(hostsConfigPath, 'utf-8')
         .split('\n')
         .map(host => {
@@ -51,8 +57,11 @@ const hosts
             return false
 
         })
-        .filter(host => !!host)
+        .filter(Boolean)
+}
 
+updateHosts()
+fs.watchFile(hostsConfigPath, updateHosts)
 
 if(proxy.length === 0){
 
@@ -69,14 +78,6 @@ Add a correct proxy address: "proxy 8.8.8.8"`
 
 
 const updns = require('./../lib').createServer(bind.port, bind.address)
-const domainEvent = new EventEmitter()
-
-hosts.forEach(host => {
-    domainEvent.on(host.domain, send => {
-        send(host.ip)
-    })
-})
-
 
 updns.on('error', err => {
     process.send({
@@ -94,15 +95,27 @@ updns.on('listening', () => {
 
 
 updns.on('message', (domain, send, proxyTo) => {
+  let matchFound = false
 
-    if(domainEvent.listenerCount(domain)) {
-        domainEvent.emit(domain, send)
-    }else {
-        proxyTo(proxy[0])
+  hosts.some(host => {
+    if (domain.match(host.domain)) {
+      matchFound = host.ip
+      return true
     }
+  })
 
+  if(matchFound){
+    send(matchFound)
+  }else {
+    proxyTo(proxy[0])
+  }
+
+<<<<<<< HEAD
     log.write(domain)
     
+=======
+  writeLog(domain)
+>>>>>>> watch the hosts file, removed EventEmitter (events were stale)
 })
 
 
