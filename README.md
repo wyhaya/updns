@@ -20,10 +20,15 @@ We configure routing in the way of hosts
 
 You can use `updns config` command and then call `vim` quick edit, or find the module's installation directory and edit the `config/hosts` file
 
-```
-proxy         8.8.8.8    # Proxy => DNS Server
-google.com    1.1.1.1    # Domain => IP
-yahoo.com     2.2.2.2
+The service can be bound to an IP and port, such as for a specific ethernet adapter or any valid loopback address (127.0.0.42)
+
+You can specify standard domains, or utilize [regular expressions](https://www.regexpal.com "Regex Pal") for dynamic matching
+```ini
+bind              0.0.0.0:53     # address => port (requires restarting the service)
+proxy             8.8.8.8        # proxy => DNS Server
+google.com        1.1.1.1        # domain => IP
+yahoo.com         2.2.2.2
+/goo+gle\.com/    3.3.3.3        # regex: gooooooooooogle.com => IP
 ```
 #### Start to use
 ```
@@ -51,8 +56,9 @@ You can also create your DNS server as a module
 ```
 npm install updns
 ```
+If an IP address is not specified, the port will be bound globally (0.0.0.0)
 ```javascript
-const updns = require('updns').createServer(53)
+const updns = require('updns').createServer(53, '127.0.0.1')
 
 updns.on('error', error => {
     console.log(error)
