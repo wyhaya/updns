@@ -17,46 +17,53 @@ lazy_static! {
 }
 
 fn cap_socket_addr(reg: &Regex, text: &str) -> Option<Result<SocketAddr, InvalidType>> {
-    if let Some(cap) = reg.captures(text) {
-        return match cap.name("val") {
-            Some(m) => match m.as_str().parse() {
-                Ok(addr) => Some(Ok(addr)),
-                Err(_) => Some(Err(InvalidType::SocketAddr)),
-            },
-            None => Some(Err(InvalidType::SocketAddr)),
-        };
+    let cap = match reg.captures(text) {
+        Some(cap) => cap,
+        None => return None,
+    };
+
+    match cap.name("val") {
+        Some(m) => match m.as_str().parse() {
+            Ok(addr) => Some(Ok(addr)),
+            Err(_) => Some(Err(InvalidType::SocketAddr)),
+        },
+        None => Some(Err(InvalidType::SocketAddr)),
     }
-    None
 }
 
-fn cap_ip_addr(reg: &Regex, text: &str) -> Option<Result<(Regex, IpAddr), InvalidType>> {
-    if let Some(cap) = reg.captures(text) {
-        if let (Some(val1), Some(val2)) = (cap.name("val1"), cap.name("val2")) {
-            let (val1, val2) = (val1.as_str(), val2.as_str());
+fn cap_ip_addr(text: &str) -> Option<Result<(Regex, IpAddr), InvalidType>> {
+    let cap = match (&REG_DOMAIN_IP as &Regex).captures(text) {
+        Some(cap) => cap,
+        None => return None,
+    };
 
-            if let Ok(ip) = val1.parse() {
-                return match Regex::new(val2) {
-                    Ok(reg) => Some(Ok((reg, ip))),
-                    Err(_) => Some(Err(InvalidType::Regex)),
-                };
-            } else {
-                let ip = match val2.parse() {
-                    Ok(ip) => ip,
-                    Err(_) => return Some(Err(InvalidType::IpAddr)),
-                };
-
-                let reg = match Regex::new(val1) {
-                    Ok(reg) => reg,
-                    Err(_) => return Some(Err(InvalidType::Regex)),
-                };
-
-                return Some(Ok((reg, ip)));
-            }
+    let (val1, val2) = match (cap.name("val1"), cap.name("val2")) {
+        (Some(val1), Some(val2)) => (val1.as_str(), val2.as_str()),
+        _ => {
+            return Some(Err(InvalidType::Other));
         }
+    };
 
-        return Some(Err(InvalidType::Other));
+    // ip domain
+    if let Ok(ip) = val1.parse() {
+        return match Regex::new(val2) {
+            Ok(reg) => Some(Ok((reg, ip))),
+            Err(_) => Some(Err(InvalidType::Regex)),
+        };
     }
-    None
+
+    // domain ip
+    let ip = match val2.parse() {
+        Ok(ip) => ip,
+        Err(_) => return Some(Err(InvalidType::IpAddr)),
+    };
+
+    let reg = match Regex::new(val1) {
+        Ok(reg) => reg,
+        Err(_) => return Some(Err(InvalidType::Regex)),
+    };
+
+    return Some(Ok((reg, ip)));
 }
 
 #[derive(Debug)]
@@ -71,6 +78,7 @@ pub struct Invalid {
     pub source: String,
     pub err: InvalidType,
 }
+
 #[derive(Debug)]
 pub enum InvalidType {
     Regex,
@@ -102,8 +110,10 @@ impl Config {
     }
 
     pub fn parse(&mut self) -> io::Result<(Vec<SocketAddr>, Vec<SocketAddr>, Hosts, Vec<Invalid>)> {
-        let (mut hosts, mut binds, mut proxys, mut errors) =
-            (Hosts::new(), Vec::new(), Vec::new(), Vec::new());
+        let mut hosts = Hosts::new();
+        let mut binds = Vec::new();
+        let mut proxy = Vec::new();
+        let mut errors = Vec::new();
 
         for (n, line) in self.content.lines().enumerate() {
             // ignore
@@ -129,7 +139,7 @@ impl Config {
             // proxy
             if let Some(addr) = cap_socket_addr(&REG_PROXY, &line) {
                 match addr {
-                    Ok(addr) => proxys.push(addr),
+                    Ok(addr) => proxy.push(addr),
                     Err(err) => {
                         errors.push(Invalid {
                             line: n + 1,
@@ -146,7 +156,7 @@ impl Config {
                 if let Some(m) = cap.name("val") {
                     let (b, p, h, e) = Config::new(m.as_str())?.parse()?;
                     binds.extend(b);
-                    proxys.extend(p);
+                    proxy.extend(p);
                     hosts.extend(h);
                     errors.extend(e);
                 } else {
@@ -156,7 +166,7 @@ impl Config {
             }
 
             // host
-            if let Some(d) = cap_ip_addr(&REG_DOMAIN_IP, &line) {
+            if let Some(d) = cap_ip_addr(&line) {
                 match d {
                     Ok((domain, ip)) => hosts.push(domain, ip),
                     Err(err) => {
@@ -177,7 +187,7 @@ impl Config {
             });
         }
 
-        Ok((binds, proxys, hosts, errors))
+        Ok((binds, proxy, hosts, errors))
     }
 }
 

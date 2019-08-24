@@ -14,6 +14,7 @@ use async_std::task;
 use config::{Config, Hosts, Invalid, InvalidType};
 use dirs;
 use lib::*;
+use regex::Regex;
 use std::env;
 use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
@@ -90,6 +91,18 @@ fn main() {
                 if values.len() != 2 {
                     exit!("'add' value: [DOMAIN] [IP]");
                 }
+
+                if let Err(err) = Regex::new(values[0]) {
+                    exit!(
+                        "Cannot resolve '{}' to regular expression\n{:?}",
+                        values[0],
+                        err
+                    );
+                }
+                if let Err(_) = values[1].parse::<IpAddr>() {
+                    exit!("Cannot resolve '{}' to ip address", values[1]);
+                }
+
                 let mut config = match Config::new(&config_path) {
                     Ok(c) => c,
                     Err(err) => exit!("Failed to read config file: {:?}\n{:?}", &config_path, err),
@@ -103,6 +116,7 @@ fn main() {
                     if value.is_empty() {
                         exit!("'rm' value: [DOMAIN | IP]");
                     }
+                    log!("todo");
                 }
             }
             "ls" => {
@@ -114,7 +128,7 @@ fn main() {
                     }
                 }
                 for (domain, ip) in hosts.iter() {
-                    println!("{:domain$}    {}", domain.as_str(), ip, domain = n);
+                    log!("{:domain$}    {}", domain.as_str(), ip, domain = n);
                 }
             }
             "config" => {
@@ -135,7 +149,7 @@ fn main() {
                     Ok(p) => p.display().to_string(),
                     Err(err) => exit!("Failed to get directory\n{:?}", err),
                 };
-                println!("Binary: {}\nConfig: {:?}", binary, config_path);
+                log!("Binary: {}\nConfig: {:?}", binary, config_path);
             }
             "help" => {
                 app.help();
@@ -150,21 +164,39 @@ fn main() {
         return;
     }
 
-    let (_, mut binds, proxys, hosts) = config_parse(&config_path);
+    let (_, mut binds, proxy, hosts) = config_parse(&config_path);
     if binds.is_empty() {
         warn!("Will bind the default address '{}'", DEFAULT_BIND);
         binds.push(DEFAULT_BIND.parse().unwrap());
     }
-    if proxys.is_empty() {
+    if proxy.is_empty() {
         warn!(
             "Will use the default proxy address '{}'",
             DEFAULT_PROXY.join(", ")
         );
     }
-    update_config(proxys, hosts);
 
-    task::spawn(watch_config(config_path));
-    task::block_on(run_server(binds));
+    update_config(proxy, hosts);
+
+    // Run server
+    for addr in binds {
+        task::spawn(run_server(addr.clone()));
+    }
+    // watch config
+    task::block_on(watch_config(config_path));
+}
+
+fn update_config(mut proxy: Vec<SocketAddr>, hosts: Hosts) {
+    if proxy.is_empty() {
+        proxy = DEFAULT_PROXY
+            .iter()
+            .map(|p| p.parse().unwrap())
+            .collect::<Vec<SocketAddr>>();
+    }
+    unsafe {
+        PROXY = proxy;
+        HOSTS = Some(hosts);
+    };
 }
 
 fn config_parse(file: &PathBuf) -> (Config, Vec<SocketAddr>, Vec<SocketAddr>, Hosts) {
@@ -173,13 +205,13 @@ fn config_parse(file: &PathBuf) -> (Config, Vec<SocketAddr>, Vec<SocketAddr>, Ho
         Err(err) => exit!("Failed to read config file: {:?}\n{:?}", file, err),
     };
 
-    let (binds, proxys, hosts, errors) = match config.parse() {
+    let (binds, proxy, hosts, errors) = match config.parse() {
         Ok(d) => d,
         Err(err) => exit!("Parsing config file failed\n{:?}", err),
     };
     output_invalid(errors);
 
-    (config, binds, proxys, hosts)
+    (config, binds, proxy, hosts)
 }
 
 fn output_invalid(errors: Vec<Invalid>) {
@@ -212,55 +244,34 @@ async fn watch_config(p: PathBuf) {
         .await;
 }
 
-fn update_config(mut proxy: Vec<SocketAddr>, hosts: Hosts) {
-    if proxy.is_empty() {
-        proxy = DEFAULT_PROXY
-            .iter()
-            .map(|p| p.parse().unwrap())
-            .collect::<Vec<SocketAddr>>();
-    }
-    unsafe {
-        PROXY = proxy;
-        HOSTS = Some(hosts);
+async fn run_server(addr: SocketAddr) {
+    let socket = match UdpSocket::bind(&addr).await {
+        Ok(socket) => {
+            log!("Start listening to '{}'", addr);
+            socket
+        }
+        Err(err) => exit!("Binding '{}' failed\n{:?}", addr, err),
     };
-}
 
-async fn run_server(binds: Vec<SocketAddr>) {
-    let mut tasks = vec![];
-    for addr in binds {
-        let task = task::spawn(async move {
-            let socket = match UdpSocket::bind(&addr).await {
-                Ok(socket) => {
-                    log!("Start listening to '{}'", addr);
-                    socket
-                }
-                Err(err) => exit!("Binding '{}' failed\n{:?}", addr, err),
-            };
-            loop {
-                let mut req = BytePacketBuffer::new();
-                match socket.recv_from(&mut req.buf).await {
-                    Ok((len, src)) => {
-                        let res = match handle(req, len).await {
-                            Ok(data) => data,
-                            Err(err) => {
-                                error!("Processing request failed\n{:?}", err);
-                                continue;
-                            }
-                        };
-                        if let Err(err) = socket.send_to(&res, &src).await {
-                            error!("Replying to '{}' failed\n{:?}", &src, err);
-                        }
-                    }
-                    Err(err) => {
-                        error!("Failed to receive message\n{:?}", err);
-                    }
-                }
+    loop {
+        let mut req = BytePacketBuffer::new();
+        let (len, src) = match socket.recv_from(&mut req.buf).await {
+            Ok(r) => r,
+            Err(err) => {
+                error!("Failed to receive message\n{:?}", err);
+                continue;
             }
-        });
-        tasks.push(task);
-    }
-    for task in tasks {
-        task.await;
+        };
+        let res = match handle(req, len).await {
+            Ok(data) => data,
+            Err(err) => {
+                error!("Processing request failed\n{:?}", err);
+                continue;
+            }
+        };
+        if let Err(err) = socket.send_to(&res, &src).await {
+            error!("Replying to '{}' failed\n{:?}", &src, err);
+        }
     }
 }
 
@@ -332,17 +343,20 @@ async fn handle(mut req: BytePacketBuffer, len: usize) -> io::Result<Vec<u8>> {
 
     log!("Query: {} Type: {:?}", query.name, query.qtype);
 
-    if let Some(answer) = get_answer(&query.name, query.qtype) {
-        request.header.recursion_desired = true;
-        request.header.recursion_available = true;
-        request.header.response = true;
-        request.answers.push(answer);
-        let mut res_buffer = BytePacketBuffer::new();
-        request.write(&mut res_buffer)?;
-        let len = res_buffer.pos();
-        let data = res_buffer.get_range(0, len)?;
-        Ok(data.to_vec())
-    } else {
-        proxy(&req.buf[..len]).await
-    }
+    // Whether to proxy
+    let answer = match get_answer(&query.name, query.qtype) {
+        Some(a) => a,
+        None => return proxy(&req.buf[..len]).await,
+    };
+
+    request.header.recursion_desired = true;
+    request.header.recursion_available = true;
+    request.header.response = true;
+    request.answers.push(answer);
+    let mut res_buffer = BytePacketBuffer::new();
+    request.write(&mut res_buffer)?;
+
+    let len = res_buffer.pos();
+    let data = res_buffer.get_range(0, len)?;
+    Ok(data.to_vec())
 }
