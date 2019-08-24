@@ -1,0 +1,67 @@
+
+language: rust
+services: docker
+sudo: required
+
+env:
+  global:
+    - CRATE_NAME=updns
+
+matrix:
+  include:
+
+    - env: TARGET=linux
+      os: linux
+
+    - env: TARGET=osx
+      os: osx
+
+    - env: TARGET=windows
+      os: windows
+
+before_install:
+  - set -e
+  - rustup default nightly
+  - rustup component add rustfmt
+
+script:
+  - cargo fmt --all -- --check
+  - cargo test
+  - cargo build --release
+
+after_script: set +e
+
+before_deploy:
+  - cd ./target/release/
+  - test -r $CRATE_NAME && zip $CRATE_NAME-$TRAVIS_TAG-$TARGET.zip $CRATE_NAME || mv $CRATE_NAME.exe $CRATE_NAME-$TRAVIS_TAG-$TARGET.exe
+  - cd ../../
+
+deploy:
+
+  - provider: releases
+    api_key:
+      secure: $GITHUB_TOKEN
+    file_glob: true
+    file: ./target/release/$CRATE_NAME-$TRAVIS_TAG-$TARGET.*
+    skip_cleanup: true
+    on:
+      tags: true
+
+  - provider: cargo
+    token: $CARGO_TOKEN
+    on:
+      condition: $TARGET = linux
+      tags: true
+
+cache: cargo
+before_cache:
+  - chmod -R a+r $HOME/.cargo
+
+branches:
+  only:
+    - /^v\d+\.\d+\.\d+.*$/
+    - master
+
+notifications:
+  email:
+    on_success: never
