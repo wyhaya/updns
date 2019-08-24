@@ -18,7 +18,7 @@ use std::env;
 use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use std::process::Command;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use watch::Watch;
 
 const CONFIG_NAME: &str = ".updns";

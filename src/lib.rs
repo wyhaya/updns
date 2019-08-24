@@ -4,7 +4,7 @@
 #![allow(dead_code)]
 
 use std::io::{Error, ErrorKind};
-use std::io::{Read, Result};
+use std::io::Result;
 
 use std::net::{Ipv4Addr, Ipv6Addr};
 
