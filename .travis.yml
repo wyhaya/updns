@@ -26,7 +26,7 @@ before_install:
 
 script:
   - cargo fmt --all -- --check
-  - cargo test
+  - cargo test --release
   - cargo build --release
 
 after_script: set +e
