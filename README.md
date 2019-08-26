@@ -60,12 +60,12 @@ docker build -t updns .
 
 Start up
 ```bash
-docker run -d --name updns -p 53:53/udp --restart always updns
+docker run -d --name updns -p 53:53/udp -v /root/updns/:/root/.updns/ --restart always updns
 ```
 
 ## Config
 
-You can use `updns config` command and then call `vim` quick edit, or use `updns path` find the updns's installation directory and edit the `.updns` file
+You can use `updns config` command and then call `vim` quick edit, or use `updns path` find the updns's installation directory and edit the `config` file
 
 You can specify standard domains, or utilize [regular expressions](https://rustexp.lpil.uk "rustexp") for dynamic matching, 
 You can update the config file at any time, updns will listen for file changes

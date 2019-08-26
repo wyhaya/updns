@@ -1,9 +1,10 @@
 use regex::Regex;
+use std::fs;
 use std::fs::File;
 use std::io;
 use std::io::{Read, Write};
 use std::net::{IpAddr, SocketAddr};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::slice::Iter;
 
 lazy_static! {
@@ -12,7 +13,7 @@ lazy_static! {
     static ref REG_PROXY: Regex = Regex::new(r#"^\s*proxy\s+(?P<val>[^\s#]+)"#).unwrap();
     // todo
     // The path will also contain '#' and ' '
-    static ref REG_IMPORT: Regex = Regex::new(r#"\s*import\s+(?P<val>(/.*))"#).unwrap();
+    static ref REG_IMPORT: Regex = Regex::new(r#"^\s*import\s+(?P<val>(.*))$"#).unwrap();
     static ref REG_DOMAIN_IP: Regex = Regex::new(r#"^\s*(?P<val1>[^\s#]+)\s+(?P<val2>[^\s#]+)"#).unwrap();
 }
 
@@ -68,6 +69,7 @@ fn cap_ip_addr(text: &str) -> Option<Result<(Regex, IpAddr), InvalidType>> {
 
 #[derive(Debug)]
 pub struct Config {
+    path: PathBuf,
     file: File,
     content: String,
 }
@@ -89,7 +91,12 @@ pub enum InvalidType {
 
 impl Config {
     pub fn new<P: AsRef<Path>>(path: P) -> io::Result<Config> {
-        let mut file = std::fs::OpenOptions::new()
+        let path = path.as_ref();
+
+        if let Some(dir) = path.parent() {
+            fs::create_dir_all(dir)?;
+        }
+        let mut file = fs::OpenOptions::new()
             .read(true)
             .append(true)
             .create(true)
@@ -98,7 +105,11 @@ impl Config {
         let mut content = String::new();
         file.read_to_string(&mut content)?;
 
-        Ok(Config { file, content })
+        Ok(Config {
+            file,
+            content,
+            path: path.to_path_buf(),
+        })
     }
 
     pub fn add(&mut self, domain: &str, ip: &str) -> std::io::Result<()> {
@@ -154,7 +165,15 @@ impl Config {
             // import
             if let Some(cap) = REG_IMPORT.captures(&line) {
                 if let Some(m) = cap.name("val") {
-                    let (b, p, h, e) = Config::new(m.as_str())?.parse()?;
+                    let mut p = Path::new(m.as_str()).to_path_buf();
+
+                    if p.is_relative() {
+                        if let Some(parent) = self.path.parent() {
+                            p = parent.join(p);
+                        }
+                    }
+
+                    let (b, p, h, e) = Config::new(p)?.parse()?;
                     binds.extend(b);
                     proxy.extend(p);
                     hosts.extend(h);

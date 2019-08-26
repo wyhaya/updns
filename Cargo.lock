@@ -519,7 +519,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "updns"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "ace 0.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "async-std 0.99.4 (registry+https://github.com/rust-lang/crates.io-index)",

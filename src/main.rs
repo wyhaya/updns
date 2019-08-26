@@ -22,7 +22,7 @@ use std::process::Command;
 use std::time::Duration;
 use watch::Watch;
 
-const CONFIG_NAME: &str = ".updns";
+const CONFIG_NAME: &str = ".updns/config";
 const DEFAULT_BIND: &str = "0.0.0.0:53";
 const DEFAULT_PROXY: [&str; 2] = ["8.8.8.8:53", "114.114.114.114:53"];
 const PROXY_TIMEOUT: u64 = 2000;
@@ -149,7 +149,11 @@ fn main() {
                     Ok(p) => p.display().to_string(),
                     Err(err) => exit!("Failed to get directory\n{:?}", err),
                 };
-                log!("Binary: {}\nConfig: {:?}", binary, config_path);
+                log!(
+                    "Binary: {}\nConfig: {}",
+                    binary,
+                    config_path.to_string_lossy()
+                );
             }
             "help" => {
                 app.help();
