@@ -116,7 +116,12 @@ fn main() {
                     if value.is_empty() {
                         exit!("'rm' value: [DOMAIN | IP]");
                     }
-                    log!("todo");
+                    match ask("Confirm delete? Y/N\n") {
+                        Ok(d) => {
+                            log!("todo");
+                        }
+                        Err(err) => exit!("{:?}", err),
+                    }
                 }
             }
             "ls" => {
@@ -188,6 +193,22 @@ fn main() {
     }
     // watch config
     task::block_on(watch_config(config_path));
+}
+
+fn ask(tips: &str) -> io::Result<bool> {
+    use std::io;
+    use std::io::Write;
+    io::stdout().write(tips.as_bytes())?;
+    io::stdout().flush()?;
+
+    let mut s = String::new();
+    io::stdin().read_line(&mut s)?;
+
+    return match s.to_uppercase().as_str() {
+        "Y\n" => Ok(true),
+        "N\n" => Ok(false),
+        _ => Ok(ask(&tips)?),
+    };
 }
 
 fn update_config(mut proxy: Vec<SocketAddr>, hosts: Hosts) {
