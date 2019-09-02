@@ -24,7 +24,7 @@ use watch::Watch;
 
 const CONFIG_NAME: &str = ".updns/config";
 const DEFAULT_BIND: &str = "0.0.0.0:53";
-const DEFAULT_PROXY: [&str; 2] = ["8.8.8.8:53", "114.114.114.114:53"];
+const DEFAULT_PROXY: [&str; 2] = ["8.8.8.8:53", "1.1.1.1:53"];
 const PROXY_TIMEOUT: u64 = 2000;
 const WATCH_INTERVAL: u64 = 3000;
 static mut PROXY: Vec<SocketAddr> = Vec::new();
@@ -117,9 +117,7 @@ fn main() {
                         exit!("'rm' value: [DOMAIN | IP]");
                     }
                     match ask("Confirm delete? Y/N\n") {
-                        Ok(d) => {
-                            log!("todo");
-                        }
+                        Ok(_) => log!("todo"),
                         Err(err) => exit!("{:?}", err),
                     }
                 }
@@ -204,11 +202,11 @@ fn ask(tips: &str) -> io::Result<bool> {
     let mut s = String::new();
     io::stdin().read_line(&mut s)?;
 
-    return match s.to_uppercase().as_str() {
+    match s.to_uppercase().as_str() {
         "Y\n" => Ok(true),
         "N\n" => Ok(false),
         _ => Ok(ask(&tips)?),
-    };
+    }
 }
 
 fn update_config(mut proxy: Vec<SocketAddr>, hosts: Hosts) {
@@ -257,7 +255,7 @@ fn output_invalid(errors: Vec<Invalid>) {
 async fn watch_config(p: PathBuf) {
     let mut watch = Watch::new(p, WATCH_INTERVAL);
     watch
-        .change(|c| {
+        .for_each(|c| {
             log!("Reload the configuration file: {:?}", &c);
             if let Ok(mut config) = Config::new(c) {
                 if let Ok((_, proxy, hosts, errors)) = config.parse() {

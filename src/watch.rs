@@ -22,7 +22,7 @@ impl Watch {
         Ok(modified)
     }
 
-    pub async fn change(&mut self, func: fn(path: &PathBuf)) {
+    pub async fn for_each(&mut self, func: fn(path: &PathBuf)) {
         let mut repeat = stream::repeat(0);
         let mut before = match self.modified().await {
             Ok(time) => Some(time),
