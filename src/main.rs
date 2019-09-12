@@ -22,7 +22,7 @@ use std::process::Command;
 use std::time::Duration;
 use watch::Watch;
 
-const CONFIG_NAME: &str = ".updns/config";
+const CONFIG_FILE: [&str; 2] = [".updns", "config"];
 const DEFAULT_BIND: &str = "0.0.0.0:53";
 const DEFAULT_PROXY: [&str; 2] = ["8.8.8.8:53", "1.1.1.1:53"];
 const PROXY_TIMEOUT: u64 = 2000;
@@ -79,7 +79,7 @@ fn main() {
             PathBuf::from(values[0])
         }
         None => match dirs::home_dir() {
-            Some(p) => p.join(CONFIG_NAME),
+            Some(p) => p.join(CONFIG_FILE[0]).join(CONFIG_FILE[1]),
             None => exit!("Can't get home directory"),
         },
     };
