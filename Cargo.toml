@@ -1,6 +1,6 @@
 [package]
 name = "updns"
-version = "0.0.3"
+version = "0.0.4"
 edition = "2018"
 
 authors = ["wyhaya <wyhaya@gmail.com>"]
@@ -21,5 +21,7 @@ keywords = [
 ace = "0.0.2"
 async-std = "0.99.4"
 dirs = "2.0.2"
-lazy_static = "1.3.0"
-regex = "1.2.1"
+lazy_static = "1.4.0"
+log = {version = "0.4.8", features = ["release_max_level_info"]}
+regex = "1.3.1"
+time = "0.1.42"

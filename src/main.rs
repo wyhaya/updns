@@ -1,10 +1,9 @@
-#![feature(const_vec_new)]
-
 #[macro_use]
 extern crate lazy_static;
 
 mod config;
 mod lib;
+mod logger;
 mod watch;
 
 use ace::App;
@@ -14,6 +13,7 @@ use async_std::task;
 use config::{Config, Hosts, Invalid, InvalidType};
 use dirs;
 use lib::*;
+use log::{error, info, warn};
 use regex::Regex;
 use std::env;
 use std::net::{IpAddr, SocketAddr};
@@ -30,30 +30,9 @@ const WATCH_INTERVAL: u64 = 3000;
 static mut PROXY: Vec<SocketAddr> = Vec::new();
 static mut HOSTS: Option<Hosts> = None;
 
-macro_rules! log {
-    ($($arg:tt)*) => {
-        println!($($arg)*);
-    };
-}
-
-macro_rules! warn {
-    ($($arg:tt)*) => {
-        print!("\x1B[{}m{}\x1B[0m", "1;33", "warning: ");
-        println!($($arg)*);
-    };
-}
-
-macro_rules! error {
-    ($($arg:tt)*) => {
-        eprint!("\x1B[{}m{}\x1B[0m", "1;31", "error: ");
-        eprintln!($($arg)*);
-    };
-}
-
 macro_rules! exit {
     ($($arg:tt)*) => {
         {
-            eprint!("\x1B[{}m{}\x1B[0m", "1;31", "error: ");
             eprintln!($($arg)*);
             std::process::exit(1)
         }
@@ -61,6 +40,7 @@ macro_rules! exit {
 }
 
 fn main() {
+    let _ = logger::init();
     let app = App::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"))
         .cmd("add", "Add a DNS record")
         .cmd("rm", "Remove a DNS record")
@@ -105,7 +85,7 @@ fn main() {
 
                 let mut config = match Config::new(&config_path) {
                     Ok(c) => c,
-                    Err(err) => exit!("Failed to read config file: {:?}\n{:?}", &config_path, err),
+                    Err(err) => exit!("Failed to read config file {:?}\n{:?}", &config_path, err),
                 };
                 if let Err(err) = config.add(&values[0], &values[1]) {
                     exit!("Add record failed\n{:?}", err);
@@ -117,7 +97,7 @@ fn main() {
                         exit!("'rm' value: [DOMAIN | IP]");
                     }
                     match ask("Confirm delete? Y/N\n") {
-                        Ok(_) => log!("todo"),
+                        Ok(_) => println!("todo"),
                         Err(err) => exit!("{:?}", err),
                     }
                 }
@@ -131,7 +111,7 @@ fn main() {
                     }
                 }
                 for (domain, ip) in hosts.iter() {
-                    log!("{:domain$}    {}", domain.as_str(), ip, domain = n);
+                    println!("{:domain$}    {}", domain.as_str(), ip, domain = n);
                 }
             }
             "config" => {
@@ -152,7 +132,7 @@ fn main() {
                     Ok(p) => p.display().to_string(),
                     Err(err) => exit!("Failed to get directory\n{:?}", err),
                 };
-                log!(
+                println!(
                     "Binary: {}\nConfig: {}",
                     binary,
                     config_path.to_string_lossy()
@@ -225,7 +205,7 @@ fn update_config(mut proxy: Vec<SocketAddr>, hosts: Hosts) {
 fn config_parse(file: &PathBuf) -> (Config, Vec<SocketAddr>, Vec<SocketAddr>, Hosts) {
     let mut config = match Config::new(file) {
         Ok(c) => c,
-        Err(err) => exit!("Failed to read config file: {:?}\n{:?}", file, err),
+        Err(err) => exit!("Failed to read config file {:?}\n{:?}", file, err),
     };
 
     let (binds, proxy, hosts, errors) = match config.parse() {
@@ -247,7 +227,7 @@ fn output_invalid(errors: Vec<Invalid>) {
                 InvalidType::Other => "Invalid line",
             };
             warn!("{}", msg);
-            log!("Line {}: {}", invalid.line, invalid.source);
+            info!("Line {}: {}", invalid.line, invalid.source);
         }
     }
 }
@@ -256,7 +236,7 @@ async fn watch_config(p: PathBuf) {
     let mut watch = Watch::new(p, WATCH_INTERVAL);
     watch
         .for_each(|c| {
-            log!("Reload the configuration file: {:?}", &c);
+            info!("Reload the configuration file: {:?}", &c);
             if let Ok(mut config) = Config::new(c) {
                 if let Ok((_, proxy, hosts, errors)) = config.parse() {
                     update_config(proxy, hosts);
@@ -270,7 +250,7 @@ async fn watch_config(p: PathBuf) {
 async fn run_server(addr: SocketAddr) {
     let socket = match UdpSocket::bind(&addr).await {
         Ok(socket) => {
-            log!("Start listening to '{}'", addr);
+            info!("Start listening to '{}'", addr);
             socket
         }
         Err(err) => exit!("Binding '{}' failed\n{:?}", addr, err),
@@ -364,7 +344,7 @@ async fn handle(mut req: BytePacketBuffer, len: usize) -> io::Result<Vec<u8>> {
         None => return proxy(&req.buf[..len]).await,
     };
 
-    log!("Query: {} Type: {:?}", query.name, query.qtype);
+    info!("{} {:?}", query.name, query.qtype);
 
     // Whether to proxy
     let answer = match get_answer(&query.name, query.qtype) {

@@ -32,7 +32,19 @@ You may use `sudo` to run this command because you will use the `53` port, make 
 
 Now change your local DNS server to `127.0.0.1` 🚀
 
-### Command
+## Running in docker
+
+Build docker image
+```bash
+docker build -t updns .
+```
+
+Start up
+```bash
+docker run -d --name updns -p 53:53/udp -v /root/updns/:/root/.updns/ --restart always updns
+```
+
+## Command
 
 ```
 Usage:
@@ -49,18 +61,6 @@ Command:
 
 Option:
     -c    Specify a config file
-```
-
-## Running in docker
-
-Build docker image
-```bash
-docker build -t updns .
-```
-
-Start up
-```bash
-docker run -d --name updns -p 53:53/udp -v /root/updns/:/root/.updns/ --restart always updns
 ```
 
 ## Config
