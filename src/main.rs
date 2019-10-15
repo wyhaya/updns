@@ -154,14 +154,10 @@ fn main() {
                 let cmd = Command::new(CONFIG_COMMAND).arg(&config_path).status();
                 match cmd {
                     Ok(status) => {
-                        warn!(
-                            "'{}' exits with a non-zero status code: {:?}",
-                            CONFIG_COMMAND, status
-                        );
                         if status.success() {
                             config_parse(&config_path);
                         } else {
-                            warn!(
+                            println!(
                                 "'{}' exits with a non-zero status code: {:?}",
                                 CONFIG_COMMAND, status
                             );
