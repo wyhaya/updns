@@ -1,7 +1,7 @@
 use async_std::fs;
 use async_std::io;
+use async_std::prelude::*;
 use async_std::stream;
-use async_std::stream::Stream;
 use async_std::task;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};

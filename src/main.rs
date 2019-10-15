@@ -3,17 +3,15 @@ extern crate lazy_static;
 
 mod config;
 mod lib;
-mod logger;
 mod watch;
 
 use ace::App;
 use async_std::io;
 use async_std::net::UdpSocket;
 use async_std::task;
-use config::{Config, Hosts, Invalid, InvalidType};
+use config::{Config, Hosts, Invalid, ParseConfig};
 use dirs;
 use lib::*;
-use log::{error, info, warn};
 use regex::Regex;
 use std::env;
 use std::net::{IpAddr, SocketAddr};
@@ -22,13 +20,18 @@ use std::process::Command;
 use std::time::Duration;
 use watch::Watch;
 
-const CONFIG_FILE: [&str; 2] = [".updns", "config"];
-const DEFAULT_BIND: &str = "0.0.0.0:53";
-const DEFAULT_PROXY: [&str; 2] = ["8.8.8.8:53", "1.1.1.1:53"];
-const PROXY_TIMEOUT: u64 = 2000;
-const WATCH_INTERVAL: u64 = 3000;
+const CONFIG_FILE: [&'static str; 2] = [".updns", "config"];
+const CONFIG_COMMAND: &'static str = "vim";
+
+const DEFAULT_BIND: &'static str = "0.0.0.0:53";
+const DEFAULT_PROXY: [&'static str; 2] = ["8.8.8.8:53", "1.1.1.1:53"];
+const DEFAULT_TIMEOUT: u64 = 2000;
+
 static mut PROXY: Vec<SocketAddr> = Vec::new();
 static mut HOSTS: Option<Hosts> = None;
+static mut TIMEOUT: u64 = DEFAULT_TIMEOUT;
+
+const WATCH_INTERVAL: u64 = 5000;
 
 macro_rules! exit {
     ($($arg:tt)*) => {
@@ -38,18 +41,37 @@ macro_rules! exit {
         }
     };
 }
+macro_rules! error {
+    ($($arg:tt)*) => {
+        eprint!("{} ERROR ", time::now().strftime("[%Y-%m-%d %H:%M:%S]").unwrap());
+        eprintln!($($arg)*);
+    };
+}
+macro_rules! info {
+    ($($arg:tt)*) => {
+        print!("{} INFO  ", time::now().strftime("[%Y-%m-%d %H:%M:%S]").unwrap());
+        println!($($arg)*);
+    };
+}
+macro_rules! warn {
+    ($($arg:tt)*) => {
+        print!("{} WARN  ", time::now().strftime("[%Y-%m-%d %H:%M:%S]").unwrap());
+        println!($($arg)*);
+    };
+}
 
 fn main() {
-    let _ = logger::init();
+    let cct = format!("Call '{}' to edit the configuration file", CONFIG_COMMAND);
     let app = App::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"))
         .cmd("add", "Add a DNS record")
         .cmd("rm", "Remove a DNS record")
         .cmd("ls", "Print all configured DNS records")
-        .cmd("config", "Call vim to edit the configuration file")
+        .cmd("config", cct.as_str())
         .cmd("path", "Print related directories")
         .cmd("help", "Print help information")
         .cmd("version", "Print version information")
-        .opt("-c", "Specify a config file");
+        .opt("-c", "Specify a config file")
+        .opt("-w", "Check the interval of the configuration file");
 
     let config_path = match app.value("-c") {
         Some(values) => {
@@ -62,6 +84,20 @@ fn main() {
             Some(p) => p.join(CONFIG_FILE[0]).join(CONFIG_FILE[1]),
             None => exit!("Can't get home directory"),
         },
+    };
+
+    // Check profile interval
+    let watch_interval = match app.value("-w") {
+        Some(values) => {
+            if values.is_empty() {
+                exit!("'-w' value: [ms]");
+            }
+            match &values[0].parse::<u64>() {
+                Ok(t) => *t,
+                Err(_) => exit!("Cannot resolve '{}' to number", &values[0]),
+            }
+        }
+        None => WATCH_INTERVAL,
     };
 
     if let Some(cmd) = app.command() {
@@ -103,28 +139,35 @@ fn main() {
                 }
             }
             "ls" => {
-                let (_, _, _, mut hosts) = config_parse(&config_path);
+                let mut config = config_parse(&config_path);
                 let mut n = 0;
-                for (reg, _) in hosts.iter() {
+                for (reg, _) in config.hosts.iter() {
                     if reg.as_str().len() > n {
                         n = reg.as_str().len();
                     }
                 }
-                for (domain, ip) in hosts.iter() {
+                for (domain, ip) in config.hosts.iter() {
                     println!("{:domain$}    {}", domain.as_str(), ip, domain = n);
                 }
             }
             "config" => {
-                let cmd = Command::new("vim").arg(&config_path).status();
+                let cmd = Command::new(CONFIG_COMMAND).arg(&config_path).status();
                 match cmd {
                     Ok(status) => {
+                        warn!(
+                            "'{}' exits with a non-zero status code: {:?}",
+                            CONFIG_COMMAND, status
+                        );
                         if status.success() {
                             config_parse(&config_path);
                         } else {
-                            warn!("Non-zero state exit\n{:?}", status);
+                            warn!(
+                                "'{}' exits with a non-zero status code: {:?}",
+                                CONFIG_COMMAND, status
+                            );
                         }
                     }
-                    Err(err) => exit!("Call vim command failed\n{:?}", err),
+                    Err(err) => exit!("Call '{}' command failed\n{:?}", CONFIG_COMMAND, err),
                 }
             }
             "path" => {
@@ -151,32 +194,32 @@ fn main() {
         return;
     }
 
-    let (_, mut binds, proxy, hosts) = config_parse(&config_path);
-    if binds.is_empty() {
+    let mut parse = config_parse(&config_path);
+    if parse.bind.is_empty() {
         warn!("Will bind the default address '{}'", DEFAULT_BIND);
-        binds.push(DEFAULT_BIND.parse().unwrap());
+        parse.bind.push(DEFAULT_BIND.parse().unwrap());
     }
-    if proxy.is_empty() {
+    if parse.proxy.is_empty() {
         warn!(
             "Will use the default proxy address '{}'",
             DEFAULT_PROXY.join(", ")
         );
     }
 
-    update_config(proxy, hosts);
+    update_config(parse.proxy, parse.hosts, parse.timeout);
 
     // Run server
-    for addr in binds {
+    for addr in parse.bind {
         task::spawn(run_server(addr.clone()));
     }
     // watch config
-    task::block_on(watch_config(config_path));
+    task::block_on(watch_config(config_path, watch_interval));
 }
 
-fn ask(tips: &str) -> io::Result<bool> {
+fn ask(text: &str) -> io::Result<bool> {
     use std::io;
     use std::io::Write;
-    io::stdout().write(tips.as_bytes())?;
+    io::stdout().write(text.as_bytes())?;
     io::stdout().flush()?;
 
     let mut s = String::new();
@@ -185,11 +228,11 @@ fn ask(tips: &str) -> io::Result<bool> {
     match s.to_uppercase().as_str() {
         "Y\n" => Ok(true),
         "N\n" => Ok(false),
-        _ => Ok(ask(&tips)?),
+        _ => Ok(ask(&text)?),
     }
 }
 
-fn update_config(mut proxy: Vec<SocketAddr>, hosts: Hosts) {
+fn update_config(mut proxy: Vec<SocketAddr>, hosts: Hosts, timeout: Option<u64>) {
     if proxy.is_empty() {
         proxy = DEFAULT_PROXY
             .iter()
@@ -199,48 +242,48 @@ fn update_config(mut proxy: Vec<SocketAddr>, hosts: Hosts) {
     unsafe {
         PROXY = proxy;
         HOSTS = Some(hosts);
+        TIMEOUT = match timeout {
+            Some(t) => t,
+            None => DEFAULT_TIMEOUT,
+        };
     };
 }
 
-fn config_parse(file: &PathBuf) -> (Config, Vec<SocketAddr>, Vec<SocketAddr>, Hosts) {
+fn config_parse(file: &PathBuf) -> ParseConfig {
     let mut config = match Config::new(file) {
         Ok(c) => c,
         Err(err) => exit!("Failed to read config file {:?}\n{:?}", file, err),
     };
 
-    let (binds, proxy, hosts, errors) = match config.parse() {
+    let parse = match config.parse() {
         Ok(d) => d,
         Err(err) => exit!("Parsing config file failed\n{:?}", err),
     };
-    output_invalid(errors);
+    output_invalid(&parse.invalid);
 
-    (config, binds, proxy, hosts)
+    parse
 }
 
-fn output_invalid(errors: Vec<Invalid>) {
-    if !errors.is_empty() {
-        for invalid in errors {
-            let msg = match invalid.err {
-                InvalidType::SocketAddr => "Cannot parse socket addr",
-                InvalidType::IpAddr => "Cannot parse ip addr",
-                InvalidType::Regex => "Cannot parse Regular expression",
-                InvalidType::Other => "Invalid line",
-            };
-            warn!("{}", msg);
-            info!("Line {}: {}", invalid.line, invalid.source);
-        }
+fn output_invalid(errors: &Vec<Invalid>) {
+    for invalid in errors {
+        error!(
+            "[line:{}] {} `{}`",
+            invalid.line,
+            invalid.kind.as_str(),
+            invalid.source
+        );
     }
 }
 
-async fn watch_config(p: PathBuf) {
-    let mut watch = Watch::new(p, WATCH_INTERVAL);
+async fn watch_config(p: PathBuf, t: u64) {
+    let mut watch = Watch::new(p, t);
     watch
         .for_each(|c| {
             info!("Reload the configuration file: {:?}", &c);
             if let Ok(mut config) = Config::new(c) {
-                if let Ok((_, proxy, hosts, errors)) = config.parse() {
-                    update_config(proxy, hosts);
-                    output_invalid(errors);
+                if let Ok(parse) = config.parse() {
+                    update_config(parse.proxy, parse.hosts, parse.timeout);
+                    output_invalid(&parse.invalid);
                 }
             }
         })
@@ -261,19 +304,19 @@ async fn run_server(addr: SocketAddr) {
         let (len, src) = match socket.recv_from(&mut req.buf).await {
             Ok(r) => r,
             Err(err) => {
-                error!("Failed to receive message\n{:?}", err);
+                error!("Failed to receive message {:?}", err);
                 continue;
             }
         };
         let res = match handle(req, len).await {
             Ok(data) => data,
             Err(err) => {
-                error!("Processing request failed\n{:?}", err);
+                error!("Processing request failed {:?}", err);
                 continue;
             }
         };
         if let Err(err) = socket.send_to(&res, &src).await {
-            error!("Replying to '{}' failed\n{:?}", &src, err);
+            error!("Replying to '{}' failed {:?}", &src, err);
         }
     }
 }
@@ -284,7 +327,7 @@ async fn proxy(buf: &[u8]) -> io::Result<Vec<u8>> {
     for addr in proxy.iter() {
         let socket = UdpSocket::bind(("0.0.0.0", 0)).await?;
 
-        let data = io::timeout(Duration::from_millis(PROXY_TIMEOUT), async {
+        let data = io::timeout(Duration::from_millis(unsafe { TIMEOUT }), async {
             socket.send_to(&buf, addr).await?;
             let mut res = [0; 512];
             let len = socket.recv(&mut res).await?;
@@ -297,7 +340,7 @@ async fn proxy(buf: &[u8]) -> io::Result<Vec<u8>> {
                 return Ok(data);
             }
             Err(err) => {
-                error!("Agent request to {}\n{:?}", addr, err);
+                error!("Agent request to {} {:?}", addr, err);
             }
         }
     }

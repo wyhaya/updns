@@ -11,6 +11,7 @@ lazy_static! {
     static ref REG_IGNORE: Regex = Regex::new(r#"^\s*(#.*)?$"#).unwrap();
     static ref REG_BIND: Regex = Regex::new(r#"^\s*bind\s+(?P<val>[^\s#]+)"#).unwrap();
     static ref REG_PROXY: Regex = Regex::new(r#"^\s*proxy\s+(?P<val>[^\s#]+)"#).unwrap();
+    static ref REG_TIMEOUT: Regex = Regex::new(r#"^\s*timeout\s+(?P<val>[^\s#]+)"#).unwrap();
     // todo
     // The path will also contain '#' and ' '
     static ref REG_IMPORT: Regex = Regex::new(r#"^\s*import\s+(?P<val>(.*))$"#).unwrap();
@@ -68,17 +69,10 @@ fn cap_ip_addr(text: &str) -> Option<Result<(Regex, IpAddr), InvalidType>> {
 }
 
 #[derive(Debug)]
-pub struct Config {
-    path: PathBuf,
-    file: File,
-    content: String,
-}
-
-#[derive(Debug)]
 pub struct Invalid {
     pub line: usize,
     pub source: String,
-    pub err: InvalidType,
+    pub kind: InvalidType,
 }
 
 #[derive(Debug)]
@@ -86,7 +80,35 @@ pub enum InvalidType {
     Regex,
     SocketAddr,
     IpAddr,
+    Timeout,
     Other,
+}
+
+impl InvalidType {
+    pub fn as_str(&self) -> &str {
+        match self {
+            InvalidType::SocketAddr => "Cannot parse socket addr",
+            InvalidType::IpAddr => "Cannot parse ip addr",
+            InvalidType::Regex => "Cannot parse Regular expression",
+            InvalidType::Timeout => "Cannot parse timeout",
+            InvalidType::Other => "Invalid line",
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct ParseConfig {
+    pub bind: Vec<SocketAddr>,
+    pub proxy: Vec<SocketAddr>,
+    pub hosts: Hosts,
+    pub timeout: Option<u64>,
+    pub invalid: Vec<Invalid>,
+}
+
+#[derive(Debug)]
+pub struct Config {
+    path: PathBuf,
+    file: File,
 }
 
 impl Config {
@@ -96,37 +118,39 @@ impl Config {
         if let Some(dir) = path.parent() {
             fs::create_dir_all(dir)?;
         }
-        let mut file = fs::OpenOptions::new()
-            .read(true)
-            .append(true)
-            .create(true)
-            .open(path)?;
-
-        let mut content = String::new();
-        file.read_to_string(&mut content)?;
 
         Ok(Config {
-            file,
-            content,
+            file: fs::OpenOptions::new()
+                .read(true)
+                .append(true)
+                .create(true)
+                .open(path)?,
             path: path.to_path_buf(),
         })
     }
 
-    pub fn add(&mut self, domain: &str, ip: &str) -> std::io::Result<()> {
-        if self.content.ends_with("\n") {
+    fn read_to_string(&mut self) -> io::Result<String> {
+        let mut content = String::new();
+        self.file.read_to_string(&mut content)?;
+        Ok(content)
+    }
+
+    pub fn add(&mut self, domain: &str, ip: &str) -> io::Result<()> {
+        if self.read_to_string()?.ends_with("\n") {
             writeln!(self.file, "{}  {}", domain, ip)
         } else {
             writeln!(self.file, "\n{}  {}", domain, ip)
         }
     }
 
-    pub fn parse(&mut self) -> io::Result<(Vec<SocketAddr>, Vec<SocketAddr>, Hosts, Vec<Invalid>)> {
+    pub fn parse(&mut self) -> io::Result<ParseConfig> {
         let mut hosts = Hosts::new();
-        let mut binds = Vec::new();
+        let mut bind = Vec::new();
         let mut proxy = Vec::new();
-        let mut errors = Vec::new();
+        let mut invalid = Vec::new();
+        let mut timeout = None;
 
-        for (n, line) in self.content.lines().enumerate() {
+        for (n, line) in self.read_to_string()?.lines().enumerate() {
             // ignore
             if REG_IGNORE.is_match(&line) {
                 continue;
@@ -135,12 +159,12 @@ impl Config {
             // bind
             if let Some(addr) = cap_socket_addr(&REG_BIND, &line) {
                 match addr {
-                    Ok(addr) => binds.push(addr),
-                    Err(err) => {
-                        errors.push(Invalid {
+                    Ok(addr) => bind.push(addr),
+                    Err(kind) => {
+                        invalid.push(Invalid {
                             line: n + 1,
                             source: line.to_string(),
-                            err,
+                            kind,
                         });
                     }
                 }
@@ -151,14 +175,30 @@ impl Config {
             if let Some(addr) = cap_socket_addr(&REG_PROXY, &line) {
                 match addr {
                     Ok(addr) => proxy.push(addr),
-                    Err(err) => {
-                        errors.push(Invalid {
+                    Err(kind) => {
+                        invalid.push(Invalid {
                             line: n + 1,
                             source: line.to_string(),
-                            err,
+                            kind,
                         });
                     }
                 }
+                continue;
+            }
+
+            // timeout
+            if let Some(cap) = REG_TIMEOUT.captures(&line) {
+                if let Some(time) = cap.name("val") {
+                    if let Ok(t) = time.as_str().parse::<u64>() {
+                        timeout = Some(t);
+                        continue;
+                    }
+                }
+                invalid.push(Invalid {
+                    line: n + 1,
+                    source: line.to_string(),
+                    kind: InvalidType::Timeout,
+                });
                 continue;
             }
 
@@ -173,11 +213,11 @@ impl Config {
                         }
                     }
 
-                    let (b, p, h, e) = Config::new(p)?.parse()?;
-                    binds.extend(b);
-                    proxy.extend(p);
-                    hosts.extend(h);
-                    errors.extend(e);
+                    let config = Config::new(p)?.parse()?;
+                    bind.extend(config.bind);
+                    proxy.extend(config.proxy);
+                    hosts.extend(config.hosts);
+                    invalid.extend(config.invalid);
                 } else {
                     // todo
                 }
@@ -188,54 +228,60 @@ impl Config {
             if let Some(d) = cap_ip_addr(&line) {
                 match d {
                     Ok((domain, ip)) => hosts.push(domain, ip),
-                    Err(err) => {
-                        errors.push(Invalid {
+                    Err(kind) => {
+                        invalid.push(Invalid {
                             line: n + 1,
                             source: line.to_string(),
-                            err,
+                            kind,
                         });
                     }
                 }
                 continue;
             }
 
-            errors.push(Invalid {
+            invalid.push(Invalid {
                 line: n + 1,
                 source: line.to_string(),
-                err: InvalidType::Other,
+                kind: InvalidType::Other,
             });
         }
 
-        Ok((binds, proxy, hosts, errors))
+        Ok(ParseConfig {
+            bind,
+            proxy,
+            hosts,
+            timeout,
+            invalid,
+        })
     }
 }
 
 #[derive(Debug)]
 pub struct Hosts {
-    list: Vec<(Regex, IpAddr)>,
+    record: Vec<(Regex, IpAddr)>,
 }
 
 impl Hosts {
     pub fn new() -> Hosts {
-        Hosts { list: Vec::new() }
+        Hosts { record: Vec::new() }
     }
 
     fn push(&mut self, domain: Regex, ip: IpAddr) {
-        self.list.push((domain, ip));
+        self.record.push((domain, ip));
     }
 
     fn extend(&mut self, hosts: Hosts) {
-        for item in hosts.list {
-            self.list.push(item);
+        for item in hosts.record {
+            self.record.push(item);
         }
     }
 
     pub fn iter(&mut self) -> Iter<(Regex, IpAddr)> {
-        self.list.iter()
+        self.record.iter()
     }
 
     pub fn get(&self, domain: &str) -> Option<&IpAddr> {
-        for (reg, ip) in &self.list {
+        for (reg, ip) in &self.record {
             if reg.is_match(domain) {
                 return Some(ip);
             }
