@@ -289,7 +289,7 @@ async fn watch_config(p: PathBuf, t: u64) {
 async fn run_server(addr: SocketAddr) {
     let socket = match UdpSocket::bind(&addr).await {
         Ok(socket) => {
-            info!("Start listening to '{}'", addr);
+            println!("Start listening to '{}'", addr);
             socket
         }
         Err(err) => exit!("Binding '{}' failed\n{:?}", addr, err),
