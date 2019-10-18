@@ -49,13 +49,13 @@ macro_rules! error {
 }
 macro_rules! info {
     ($($arg:tt)*) => {
-        print!("{} INFO  ", time::now().strftime("[%Y-%m-%d %H:%M:%S]").unwrap());
+        print!("{} INFO ", time::now().strftime("[%Y-%m-%d %H:%M:%S]").unwrap());
         println!($($arg)*);
     };
 }
 macro_rules! warn {
     ($($arg:tt)*) => {
-        print!("{} WARN  ", time::now().strftime("[%Y-%m-%d %H:%M:%S]").unwrap());
+        print!("{} WARN ", time::now().strftime("[%Y-%m-%d %H:%M:%S]").unwrap());
         println!($($arg)*);
     };
 }
@@ -71,7 +71,7 @@ fn main() {
         .cmd("help", "Print help information")
         .cmd("version", "Print version information")
         .opt("-c", "Specify a config file")
-        .opt("-w", "Check the interval of the configuration file");
+        .opt("-w", "Check the interval of the configuration file (ms)");
 
     let config_path = match app.value("-c") {
         Some(values) => {
@@ -289,7 +289,7 @@ async fn watch_config(p: PathBuf, t: u64) {
 async fn run_server(addr: SocketAddr) {
     let socket = match UdpSocket::bind(&addr).await {
         Ok(socket) => {
-            println!("Start listening to '{}'", addr);
+            info!("Start listening to '{}'", addr);
             socket
         }
         Err(err) => exit!("Binding '{}' failed\n{:?}", addr, err),
