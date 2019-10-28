@@ -1,6 +1,6 @@
 [package]
 name = "updns"
-version = "0.0.6"
+version = "0.0.7"
 edition = "2018"
 
 authors = ["wyhaya <wyhaya@gmail.com>"]
@@ -19,7 +19,7 @@ keywords = [
 
 [dependencies]
 ace = "0.0.2"
-async-std = "0.99.9"
+async-std = {version = "0.99.10", features = ["unstable"]}
 dirs = "2.0.2"
 lazy_static = "1.4.0"
 regex = "1.3.1"

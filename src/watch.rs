@@ -2,7 +2,6 @@ use async_std::fs;
 use async_std::io;
 use async_std::prelude::*;
 use async_std::stream;
-use async_std::task;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
@@ -22,16 +21,16 @@ impl Watch {
         Ok(modified)
     }
 
+    // todo
+    // use Stream
     pub async fn for_each(&mut self, func: fn(path: &PathBuf)) {
-        let mut repeat = stream::repeat(0);
         let mut before = match self.modified().await {
             Ok(time) => Some(time),
             Err(_) => None,
         };
 
-        while let Some(_) = repeat.next().await {
-            task::sleep(Duration::from_millis(self.interval)).await;
-
+        let mut interval = stream::interval(Duration::from_millis(self.interval));
+        while let Some(_) = interval.next().await {
             let after = match self.modified().await {
                 Ok(time) => Some(time),
                 Err(_) => None,

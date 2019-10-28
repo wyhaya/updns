@@ -111,6 +111,8 @@ pub struct Config {
     file: File,
 }
 
+// todo
+// async
 impl Config {
     pub fn new<P: AsRef<Path>>(path: P) -> io::Result<Config> {
         let path = path.as_ref();
