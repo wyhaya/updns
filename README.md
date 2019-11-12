@@ -52,7 +52,6 @@ Usage:
             
 Command:
     add        Add a DNS record
-    rm         Remove a DNS record
     ls         Print all configured DNS records
     config     Call vim to edit the configuration file
     path       Print related directories
