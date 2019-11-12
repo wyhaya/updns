@@ -1,11 +1,11 @@
+use futures::future::{BoxFuture, FutureExt};
 use regex::Regex;
-use std::fs;
-use std::fs::File;
-use std::io;
-use std::io::{Read, Write};
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
+use std::result;
 use std::slice::Iter;
+use tokio::fs::{create_dir_all, File, OpenOptions};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, Result};
 
 lazy_static! {
     static ref REG_IGNORE: Regex = Regex::new(r#"^\s*(#.*)?$"#).unwrap();
@@ -18,7 +18,7 @@ lazy_static! {
     static ref REG_DOMAIN_IP: Regex = Regex::new(r#"^\s*(?P<val1>[^\s#]+)\s+(?P<val2>[^\s#]+)"#).unwrap();
 }
 
-fn cap_socket_addr(reg: &Regex, text: &str) -> Option<Result<SocketAddr, InvalidType>> {
+fn cap_socket_addr(reg: &Regex, text: &str) -> Option<result::Result<SocketAddr, InvalidType>> {
     let cap = match reg.captures(text) {
         Some(cap) => cap,
         None => return None,
@@ -33,7 +33,7 @@ fn cap_socket_addr(reg: &Regex, text: &str) -> Option<Result<SocketAddr, Invalid
     }
 }
 
-fn cap_ip_addr(text: &str) -> Option<Result<(Regex, IpAddr), InvalidType>> {
+fn cap_ip_addr(text: &str) -> Option<result::Result<(Regex, IpAddr), InvalidType>> {
     let cap = match (&REG_DOMAIN_IP as &Regex).captures(text) {
         Some(cap) => cap,
         None => return None,
@@ -85,7 +85,7 @@ pub enum InvalidType {
 }
 
 impl InvalidType {
-    pub fn as_str(&self) -> &str {
+    pub fn text(&self) -> &str {
         match self {
             InvalidType::SocketAddr => "Cannot parse socket addr",
             InvalidType::IpAddr => "Cannot parse ip addr",
@@ -93,168 +93,6 @@ impl InvalidType {
             InvalidType::Timeout => "Cannot parse timeout",
             InvalidType::Other => "Invalid line",
         }
-    }
-}
-
-#[derive(Debug)]
-pub struct ParseConfig {
-    pub bind: Vec<SocketAddr>,
-    pub proxy: Vec<SocketAddr>,
-    pub hosts: Hosts,
-    pub timeout: Option<u64>,
-    pub invalid: Vec<Invalid>,
-}
-
-#[derive(Debug)]
-pub struct Config {
-    path: PathBuf,
-    file: File,
-}
-
-// todo
-// async
-impl Config {
-    pub fn new<P: AsRef<Path>>(path: P) -> io::Result<Config> {
-        let path = path.as_ref();
-
-        if let Some(dir) = path.parent() {
-            fs::create_dir_all(dir)?;
-        }
-
-        Ok(Config {
-            file: fs::OpenOptions::new()
-                .read(true)
-                .append(true)
-                .create(true)
-                .open(path)?,
-            path: path.to_path_buf(),
-        })
-    }
-
-    fn read_to_string(&mut self) -> io::Result<String> {
-        let mut content = String::new();
-        self.file.read_to_string(&mut content)?;
-        Ok(content)
-    }
-
-    pub fn add(&mut self, domain: &str, ip: &str) -> io::Result<()> {
-        if self.read_to_string()?.ends_with("\n") {
-            writeln!(self.file, "{}  {}", domain, ip)
-        } else {
-            writeln!(self.file, "\n{}  {}", domain, ip)
-        }
-    }
-
-    pub fn parse(&mut self) -> io::Result<ParseConfig> {
-        let mut hosts = Hosts::new();
-        let mut bind = Vec::new();
-        let mut proxy = Vec::new();
-        let mut invalid = Vec::new();
-        let mut timeout = None;
-
-        for (n, line) in self.read_to_string()?.lines().enumerate() {
-            // ignore
-            if REG_IGNORE.is_match(&line) {
-                continue;
-            }
-
-            // bind
-            if let Some(addr) = cap_socket_addr(&REG_BIND, &line) {
-                match addr {
-                    Ok(addr) => bind.push(addr),
-                    Err(kind) => {
-                        invalid.push(Invalid {
-                            line: n + 1,
-                            source: line.to_string(),
-                            kind,
-                        });
-                    }
-                }
-                continue;
-            }
-
-            // proxy
-            if let Some(addr) = cap_socket_addr(&REG_PROXY, &line) {
-                match addr {
-                    Ok(addr) => proxy.push(addr),
-                    Err(kind) => {
-                        invalid.push(Invalid {
-                            line: n + 1,
-                            source: line.to_string(),
-                            kind,
-                        });
-                    }
-                }
-                continue;
-            }
-
-            // timeout
-            if let Some(cap) = REG_TIMEOUT.captures(&line) {
-                if let Some(time) = cap.name("val") {
-                    if let Ok(t) = time.as_str().parse::<u64>() {
-                        timeout = Some(t);
-                        continue;
-                    }
-                }
-                invalid.push(Invalid {
-                    line: n + 1,
-                    source: line.to_string(),
-                    kind: InvalidType::Timeout,
-                });
-                continue;
-            }
-
-            // import
-            if let Some(cap) = REG_IMPORT.captures(&line) {
-                if let Some(m) = cap.name("val") {
-                    let mut p = Path::new(m.as_str()).to_path_buf();
-
-                    if p.is_relative() {
-                        if let Some(parent) = self.path.parent() {
-                            p = parent.join(p);
-                        }
-                    }
-
-                    let config = Config::new(p)?.parse()?;
-                    bind.extend(config.bind);
-                    proxy.extend(config.proxy);
-                    hosts.extend(config.hosts);
-                    invalid.extend(config.invalid);
-                } else {
-                    // todo
-                }
-                continue;
-            }
-
-            // host
-            if let Some(d) = cap_ip_addr(&line) {
-                match d {
-                    Ok((domain, ip)) => hosts.push(domain, ip),
-                    Err(kind) => {
-                        invalid.push(Invalid {
-                            line: n + 1,
-                            source: line.to_string(),
-                            kind,
-                        });
-                    }
-                }
-                continue;
-            }
-
-            invalid.push(Invalid {
-                line: n + 1,
-                source: line.to_string(),
-                kind: InvalidType::Other,
-            });
-        }
-
-        Ok(ParseConfig {
-            bind,
-            proxy,
-            hosts,
-            timeout,
-            invalid,
-        })
     }
 }
 
@@ -289,5 +127,174 @@ impl Hosts {
             }
         }
         None
+    }
+}
+
+#[derive(Debug)]
+pub struct ParseConfig {
+    pub bind: Vec<SocketAddr>,
+    pub proxy: Vec<SocketAddr>,
+    pub hosts: Hosts,
+    pub timeout: Option<u64>,
+    pub invalid: Vec<Invalid>,
+}
+
+impl ParseConfig {
+    fn new() -> ParseConfig {
+        ParseConfig {
+            hosts: Hosts::new(),
+            bind: Vec::new(),
+            proxy: Vec::new(),
+            invalid: Vec::new(),
+            timeout: None,
+        }
+    }
+    fn extend(&mut self, other: Self) {
+        self.bind.extend(other.bind);
+        self.proxy.extend(other.proxy);
+        self.hosts.extend(other.hosts);
+        self.invalid.extend(other.invalid);
+        if other.timeout.is_some() {
+            self.timeout = other.timeout;
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Config {
+    path: PathBuf,
+    file: File,
+}
+
+impl Config {
+    pub async fn new<P: AsRef<Path>>(path: P) -> Result<Config> {
+        let path = path.as_ref();
+
+        if let Some(dir) = path.parent() {
+            create_dir_all(dir).await?;
+        }
+
+        Ok(Config {
+            file: OpenOptions::new()
+                .read(true)
+                .append(true)
+                .create(true)
+                .open(path)
+                .await?,
+            path: path.to_path_buf(),
+        })
+    }
+
+    async fn read_to_string(&mut self) -> Result<String> {
+        let mut content = String::new();
+        self.file.read_to_string(&mut content).await?;
+        Ok(content)
+    }
+
+    pub async fn add(&mut self, domain: &str, ip: &str) -> Result<usize> {
+        if self.read_to_string().await?.ends_with("\n") {
+            self.file
+                .write(format!("{}  {}", domain, ip).as_bytes())
+                .await
+        } else {
+            self.file
+                .write(format!("\n{}  {}", domain, ip).as_bytes())
+                .await
+        }
+    }
+
+    pub fn parse(mut self) -> BoxFuture<'static, Result<ParseConfig>> {
+        async move {
+            let mut parse = ParseConfig::new();
+
+            for (n, line) in self.read_to_string().await?.lines().enumerate() {
+                // ignore
+                if REG_IGNORE.is_match(&line) {
+                    continue;
+                }
+
+                // bind
+                if let Some(addr) = cap_socket_addr(&REG_BIND, &line) {
+                    match addr {
+                        Ok(addr) => parse.bind.push(addr),
+                        Err(kind) => parse.invalid.push(Invalid {
+                            line: n + 1,
+                            source: line.to_string(),
+                            kind,
+                        }),
+                    }
+                    continue;
+                }
+
+                // proxy
+                if let Some(addr) = cap_socket_addr(&REG_PROXY, &line) {
+                    match addr {
+                        Ok(addr) => parse.proxy.push(addr),
+                        Err(kind) => parse.invalid.push(Invalid {
+                            line: n + 1,
+                            source: line.to_string(),
+                            kind,
+                        }),
+                    }
+                    continue;
+                }
+
+                // timeout
+                if let Some(cap) = REG_TIMEOUT.captures(&line) {
+                    if let Some(time) = cap.name("val") {
+                        if let Ok(t) = time.as_str().parse::<u64>() {
+                            parse.timeout = Some(t);
+                            continue;
+                        }
+                    }
+                    parse.invalid.push(Invalid {
+                        line: n + 1,
+                        source: line.to_string(),
+                        kind: InvalidType::Timeout,
+                    });
+                    continue;
+                }
+
+                // import
+                if let Some(cap) = REG_IMPORT.captures(&line) {
+                    if let Some(m) = cap.name("val") {
+                        let mut p = Path::new(m.as_str()).to_path_buf();
+
+                        if p.is_relative() {
+                            if let Some(parent) = self.path.parent() {
+                                p = parent.join(p);
+                            }
+                        }
+
+                        parse.extend(Config::new(p).await?.parse().await?);
+                    } else {
+                        // todo
+                    }
+                    continue;
+                }
+
+                // host
+                if let Some(d) = cap_ip_addr(&line) {
+                    match d {
+                        Ok((domain, ip)) => parse.hosts.push(domain, ip),
+                        Err(kind) => parse.invalid.push(Invalid {
+                            line: n + 1,
+                            source: line.to_string(),
+                            kind,
+                        }),
+                    }
+                    continue;
+                }
+
+                parse.invalid.push(Invalid {
+                    line: n + 1,
+                    source: line.to_string(),
+                    kind: InvalidType::Other,
+                });
+            }
+
+            Ok(parse)
+        }
+            .boxed()
     }
 }

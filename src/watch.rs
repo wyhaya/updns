@@ -1,44 +1,68 @@
-use async_std::fs;
-use async_std::io;
-use async_std::prelude::*;
-use async_std::stream;
-use std::path::PathBuf;
+use futures::ready;
+use std::path::{Path, PathBuf};
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use std::time::{Duration, SystemTime};
+use tokio::fs::File;
+use tokio::io::Result;
+use tokio::prelude::*;
+use tokio::timer::Interval;
 
 pub struct Watch {
     path: PathBuf,
-    interval: u64,
+    state: Option<Pin<Box<dyn Future<Output = Result<SystemTime>>>>>,
+    modified: Result<SystemTime>,
+    timer: Interval,
 }
 
 impl Watch {
-    pub fn new(path: PathBuf, interval: u64) -> Watch {
-        Watch { interval, path }
+    pub async fn new<P: AsRef<Path>>(path: P, duration: u64) -> Watch {
+        let path = path.as_ref().to_path_buf();
+        Watch {
+            path: path.clone(),
+            state: None,
+            modified: Self::modified(path).await,
+            timer: Interval::new_interval(Duration::from_millis(duration)),
+        }
     }
 
-    async fn modified(&self) -> io::Result<SystemTime> {
-        let file = fs::File::open(&self.path).await?;
-        let modified = file.metadata().await?.modified()?;
-        Ok(modified)
+    async fn modified(p: PathBuf) -> Result<SystemTime> {
+        let file = File::open(p).await?;
+        file.metadata().await?.modified()
     }
 
-    // todo
-    // use Stream
-    pub async fn for_each(&mut self, func: fn(path: &PathBuf)) {
-        let mut before = match self.modified().await {
-            Ok(time) => Some(time),
-            Err(_) => None,
-        };
+    fn eq(a: &Result<SystemTime>, b: &Result<SystemTime>) -> bool {
+        if a.is_ok() && b.is_ok() {
+            if a.as_ref().ok() == b.as_ref().ok() {
+                return true;
+            }
+        } else if a.is_err() && b.is_err() {
+            let left = a.as_ref().err().unwrap();
+            let right = b.as_ref().err().unwrap();
+            if left.kind() == right.kind() && left.raw_os_error() == right.raw_os_error() {
+                return true;
+            }
+        }
+        false
+    }
+}
 
-        let mut interval = stream::interval(Duration::from_millis(self.interval));
-        while let Some(_) = interval.next().await {
-            let after = match self.modified().await {
-                Ok(time) => Some(time),
-                Err(_) => None,
-            };
+impl Stream for Watch {
+    type Item = ();
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        loop {
+            if let Some(state) = &mut self.state {
+                let modified: Result<SystemTime> = ready!(Pin::new(state).poll(cx));
+                self.state = None;
 
-            if before != after {
-                before = after;
-                func(&self.path);
+                if !Self::eq(&self.modified, &modified) {
+                    self.modified = modified;
+                    return Poll::Ready(Some(()));
+                }
+            } else {
+                ready!(self.timer.poll_next_unpin(cx));
+
+                self.state = Some(Box::pin(Self::modified(self.path.clone())));
             }
         }
     }
