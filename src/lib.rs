@@ -1,6 +1,7 @@
 // From   : EmilHernvall/dnsguide
 // GitHub : https://github.com/EmilHernvall/dnsguide
 
+#![allow(clippy::all)]
 #![allow(dead_code)]
 
 use std::io::{Error, ErrorKind, Result};

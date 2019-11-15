@@ -1,11 +1,15 @@
 use futures::future::{BoxFuture, FutureExt};
 use regex::Regex;
-use std::net::{IpAddr, SocketAddr};
-use std::path::{Path, PathBuf};
-use std::result;
-use std::slice::Iter;
-use tokio::fs::{create_dir_all, File, OpenOptions};
-use tokio::io::{AsyncReadExt, AsyncWriteExt, Result};
+use std::{
+    net::{IpAddr, SocketAddr},
+    path::{Path, PathBuf},
+    result,
+    slice::Iter,
+};
+use tokio::{
+    fs::{create_dir_all, File, OpenOptions},
+    io::{AsyncReadExt, AsyncWriteExt, Result},
+};
 
 lazy_static! {
     static ref REG_IGNORE: Regex = Regex::new(r#"^\s*(#.*)?$"#).unwrap();
@@ -65,7 +69,7 @@ fn cap_ip_addr(text: &str) -> Option<result::Result<(Regex, IpAddr), InvalidType
         Err(_) => return Some(Err(InvalidType::Regex)),
     };
 
-    return Some(Ok((reg, ip)));
+    Some(Ok((reg, ip)))
 }
 
 #[derive(Debug)]
@@ -192,7 +196,7 @@ impl Config {
     }
 
     pub async fn add(&mut self, domain: &str, ip: &str) -> Result<usize> {
-        if self.read_to_string().await?.ends_with("\n") {
+        if self.read_to_string().await?.ends_with('\n') {
             self.file
                 .write(format!("{}  {}", domain, ip).as_bytes())
                 .await

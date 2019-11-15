@@ -10,21 +10,25 @@ use config::{Config, Hosts, Invalid, ParseConfig};
 use dirs;
 use lib::*;
 use regex::Regex;
-use std::env::current_exe;
-use std::net::{IpAddr, SocketAddr};
-use std::path::PathBuf;
-use std::process::Command;
-use std::time::Duration;
-use tokio::io::{Error, ErrorKind, Result};
-use tokio::net::UdpSocket;
-use tokio::prelude::*;
-use tokio::timer::Timeout;
+use std::{
+    env,
+    net::{IpAddr, SocketAddr},
+    path::PathBuf,
+    process::Command,
+    time::Duration,
+};
+use tokio::{
+    io::{Error, ErrorKind, Result},
+    net::UdpSocket,
+    prelude::*,
+    timer::Timeout,
+};
 use watch::Watch;
 
-const CONFIG_FILE: [&'static str; 2] = [".updns", "config"];
+const CONFIG_FILE: [&str; 2] = [".updns", "config"];
 
-const DEFAULT_BIND: &'static str = "0.0.0.0:53";
-const DEFAULT_PROXY: [&'static str; 2] = ["8.8.8.8:53", "1.1.1.1:53"];
+const DEFAULT_BIND: &str = "0.0.0.0:53";
+const DEFAULT_PROXY: [&str; 2] = ["8.8.8.8:53", "1.1.1.1:53"];
 const DEFAULT_TIMEOUT: u64 = 2000;
 
 static mut PROXY: Vec<SocketAddr> = Vec::new();
@@ -91,8 +95,8 @@ async fn main() {
             if values.is_empty() {
                 exit!("'-w' value: [ms]");
             }
-            match &values[0].parse::<u64>() {
-                Ok(t) => *t,
+            match values[0].parse::<u64>() {
+                Ok(t) => t,
                 Err(_) => exit!("Cannot resolve '{}' to number", &values[0]),
             }
         }
@@ -102,7 +106,7 @@ async fn main() {
     if let Some(cmd) = app.command() {
         match cmd.as_str() {
             "add" => {
-                let values = app.value("add").unwrap_or(vec![]);
+                let values = app.value("add").unwrap_or_default();
                 if values.len() != 2 {
                     exit!("'add' value: [DOMAIN] [IP]");
                 }
@@ -114,7 +118,7 @@ async fn main() {
                         err
                     );
                 }
-                if let Err(_) = values[1].parse::<IpAddr>() {
+                if values[1].parse::<IpAddr>().is_err() {
                     exit!("Cannot resolve '{}' to ip address", values[1]);
                 }
 
@@ -122,18 +126,19 @@ async fn main() {
                     Ok(c) => c,
                     Err(err) => exit!("Failed to read config file {:?}\n{:?}", &config_path, err),
                 };
-                if let Err(err) = config.add(&values[0], &values[1]).await {
+                if let Err(err) = config.add(values[0], values[1]).await {
                     exit!("Add record failed\n{:?}", err);
                 }
             }
             "ls" => {
                 let mut config = config_parse(&config_path).await;
-                let mut n = 0;
-                for (reg, _) in config.hosts.iter() {
-                    if reg.as_str().len() > n {
-                        n = reg.as_str().len();
-                    }
-                }
+
+                let n = config
+                    .hosts
+                    .iter()
+                    .map(|(r, _)| r.as_str().len())
+                    .fold(0, |a, b| a.max(b));
+
                 for (domain, ip) in config.hosts.iter() {
                     println!("{:domain$}    {}", domain.as_str(), ip, domain = n);
                 }
@@ -152,7 +157,7 @@ async fn main() {
                 }
             }
             "path" => {
-                let binary = match current_exe() {
+                let binary = match env::current_exe() {
                     Ok(p) => p.display().to_string(),
                     Err(err) => exit!("Failed to get directory\n{:?}", err),
                 };
@@ -185,7 +190,7 @@ async fn main() {
 
     // Run server
     for addr in parse.bind {
-        tokio::spawn(run_server(addr.clone()));
+        tokio::spawn(run_server(addr));
     }
     // watch config
     watch_config(config_path, watch_interval).await;
@@ -201,10 +206,7 @@ fn update_config(mut proxy: Vec<SocketAddr>, hosts: Hosts, timeout: Option<u64>)
     unsafe {
         PROXY = proxy;
         HOSTS = Some(hosts);
-        TIMEOUT = match timeout {
-            Some(t) => t,
-            None => DEFAULT_TIMEOUT,
-        };
+        TIMEOUT = timeout.unwrap_or(DEFAULT_TIMEOUT);
     };
 }
 
@@ -223,7 +225,7 @@ async fn config_parse(file: &PathBuf) -> ParseConfig {
     parse
 }
 
-fn output_invalid(errors: &Vec<Invalid>) {
+fn output_invalid(errors: &[Invalid]) {
     for invalid in errors {
         error!(
             "[line:{}] {} `{}`",
@@ -319,7 +321,7 @@ fn get_answer(domain: &str, query: QueryType) -> Option<DnsRecord> {
                 if let IpAddr::V4(addr) = ip {
                     return Some(DnsRecord::A {
                         domain: domain.to_string(),
-                        addr: addr.clone(),
+                        addr: *addr,
                         ttl: 3600,
                     });
                 }
@@ -328,7 +330,7 @@ fn get_answer(domain: &str, query: QueryType) -> Option<DnsRecord> {
                 if let IpAddr::V6(addr) = ip {
                     return Some(DnsRecord::AAAA {
                         domain: domain.to_string(),
-                        addr: addr.clone(),
+                        addr: *addr,
                         ttl: 3600,
                     });
                 }

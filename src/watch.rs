@@ -1,12 +1,11 @@
 use futures::ready;
-use std::path::{Path, PathBuf};
-use std::pin::Pin;
-use std::task::{Context, Poll};
-use std::time::{Duration, SystemTime};
-use tokio::fs::File;
-use tokio::io::Result;
-use tokio::prelude::*;
-use tokio::timer::Interval;
+use std::{
+    path::{Path, PathBuf},
+    pin::Pin,
+    task::{Context, Poll},
+    time::{Duration, SystemTime},
+};
+use tokio::{fs::File, io::Result, prelude::*, timer::Interval};
 
 pub struct Watch {
     path: PathBuf,
