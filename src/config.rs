@@ -37,7 +37,7 @@ fn cap_socket_addr(reg: &Regex, text: &str) -> Option<result::Result<SocketAddr,
     }
 }
 
-fn cap_ip_addr(text: &str) -> Option<result::Result<(Regex, IpAddr), InvalidType>> {
+fn cap_ip_addr(text: &str) -> Option<result::Result<(Host, IpAddr), InvalidType>> {
     let cap = match (&REG_DOMAIN_IP as &Regex).captures(text) {
         Some(cap) => cap,
         None => return None,
@@ -52,8 +52,8 @@ fn cap_ip_addr(text: &str) -> Option<result::Result<(Regex, IpAddr), InvalidType
 
     // ip domain
     if let Ok(ip) = val1.parse() {
-        return match Regex::new(val2) {
-            Ok(reg) => Some(Ok((reg, ip))),
+        return match Host::new(val2) {
+            Ok(host) => Some(Ok((host, ip))),
             Err(_) => Some(Err(InvalidType::Regex)),
         };
     }
@@ -64,12 +64,12 @@ fn cap_ip_addr(text: &str) -> Option<result::Result<(Regex, IpAddr), InvalidType
         Err(_) => return Some(Err(InvalidType::IpAddr)),
     };
 
-    let reg = match Regex::new(val1) {
+    let host = match Host::new(val1) {
         Ok(reg) => reg,
         Err(_) => return Some(Err(InvalidType::Regex)),
     };
 
-    Some(Ok((reg, ip)))
+    Some(Ok((host, ip)))
 }
 
 #[derive(Debug)]
@@ -102,7 +102,7 @@ impl InvalidType {
 
 #[derive(Debug)]
 pub struct Hosts {
-    record: Vec<(Regex, IpAddr)>,
+    record: Vec<(Host, IpAddr)>,
 }
 
 impl Hosts {
@@ -110,8 +110,8 @@ impl Hosts {
         Hosts { record: Vec::new() }
     }
 
-    fn push(&mut self, domain: Regex, ip: IpAddr) {
-        self.record.push((domain, ip));
+    fn push(&mut self, host: Host, ip: IpAddr) {
+        self.record.push((host, ip));
     }
 
     fn extend(&mut self, hosts: Hosts) {
@@ -120,7 +120,7 @@ impl Hosts {
         }
     }
 
-    pub fn iter(&mut self) -> Iter<(Regex, IpAddr)> {
+    pub fn iter(&mut self) -> Iter<(Host, IpAddr)> {
         self.record.iter()
     }
 
@@ -131,6 +131,61 @@ impl Hosts {
             }
         }
         None
+    }
+}
+
+// domain match
+#[derive(Debug)]
+pub struct Host(MatchMode);
+
+#[derive(Debug)]
+enum MatchMode {
+    Text(String),
+    Regex(Regex),
+}
+
+impl Host {
+    fn new(domain: &str) -> result::Result<Host, regex::Error> {
+        // example.com
+        if Self::is_text(domain) {
+            return Ok(Host(MatchMode::Text(domain.to_string())));
+        }
+
+        // *.example.com
+        if Self::is_wildcard(domain) {
+            let s = format!(
+                "^{}$",
+                domain.replace(".", r"\.").replace("*", r"([a-z]|\d|-)+")
+            );
+            return Ok(Host(MatchMode::Regex(Regex::new(&s)?)));
+        }
+
+        // use regex
+        Ok(Host(MatchMode::Regex(Regex::new(domain)?)))
+    }
+
+    fn is_text(domain: &str) -> bool {
+        const ALLOW: &str = "abcdefghijklmnopqrstuvwxyz0123456789-.";
+        domain.chars().all(|item| ALLOW.chars().any(|c| item == c))
+    }
+
+    fn is_wildcard(domain: &str) -> bool {
+        const ALLOW: &str = "abcdefghijklmnopqrstuvwxyz0123456789-.*";
+        domain.chars().all(|item| ALLOW.chars().any(|c| item == c))
+    }
+
+    pub fn is_match(&self, domain: &str) -> bool {
+        match &self.0 {
+            MatchMode::Text(text) => text == domain,
+            MatchMode::Regex(reg) => reg.is_match(domain),
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        match &self.0 {
+            MatchMode::Text(text) => text,
+            MatchMode::Regex(reg) => reg.as_str(),
+        }
     }
 }
 
@@ -280,7 +335,7 @@ impl Config {
                 // host
                 if let Some(d) = cap_ip_addr(&line) {
                     match d {
-                        Ok((domain, ip)) => parse.hosts.push(domain, ip),
+                        Ok((host, ip)) => parse.hosts.push(host, ip),
                         Err(kind) => parse.invalid.push(Invalid {
                             line: n + 1,
                             source: line.to_string(),

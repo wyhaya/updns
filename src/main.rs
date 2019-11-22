@@ -139,8 +139,8 @@ async fn main() {
                     .map(|(r, _)| r.as_str().len())
                     .fold(0, |a, b| a.max(b));
 
-                for (domain, ip) in config.hosts.iter() {
-                    println!("{:domain$}    {}", domain.as_str(), ip, domain = n);
+                for (host, ip) in config.hosts.iter() {
+                    println!("{:domain$}    {}", host.as_str(), ip, domain = n);
                 }
             }
             "config" => {
