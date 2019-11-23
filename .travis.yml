@@ -21,7 +21,6 @@ matrix:
 
 before_install:
   - set -e
-  - rustup default nightly
   - rustup component add rustfmt
 
 script:

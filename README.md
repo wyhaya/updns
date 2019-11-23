@@ -71,14 +71,16 @@ You can specify standard domains, or utilize [regular expressions](https://ruste
 You can update the config file at any time, updns will listen for file changes
 
 ```ini
-bind     0.0.0.0:53    # Binding address
-proxy    8.8.8.8:53    # Proxy address
-timeout  2000          # Proxy timeout (ms)
+bind     0.0.0.0:53     # Binding address
+proxy    8.8.8.8:53     # Proxy address
+timeout  2000           # Proxy timeout (ms)
 
 # Domain matching
-google.com             1.1.1.1
-^\w+.bing.com$         2.2.2.2
-github.com             ::
+example.com             1.1.1.1
+*.example.com           2.2.2.2
+^\w+\.example\.[a-z]+$  3.3.3.3
+
+test.com                ::
 
 # Import from other file
 import /other/hosts

@@ -153,10 +153,7 @@ impl Host {
 
         // *.example.com
         if Self::is_wildcard(domain) {
-            let s = format!(
-                "^{}$",
-                domain.replace(".", r"\.").replace("*", r"([a-z]|\d|-)+")
-            );
+            let s = format!("^{}$", domain.replace(".", r"\.").replace("*", r"[^.]+"));
             return Ok(Host(MatchMode::Regex(Regex::new(&s)?)));
         }
 
@@ -355,5 +352,41 @@ impl Config {
             Ok(parse)
         }
             .boxed()
+    }
+}
+
+#[cfg(test)]
+mod test_host {
+    use super::*;
+
+    #[test]
+    fn test_create() {}
+
+    #[test]
+    fn test_test() {
+        let host = Host::new("example.com").unwrap();
+        assert!(host.is_match("example.com"));
+        assert!(!host.is_match("-example.com"));
+        assert!(!host.is_match("example.com.cn"));
+    }
+
+    #[test]
+    fn test_wildcard() {
+        let host = Host::new("*.example.com").unwrap();
+        assert!(host.is_match("test.example.com"));
+        assert!(!host.is_match("test.example.test"));
+        assert!(!host.is_match("test.test.com"));
+
+        let host = Host::new("*.example.*").unwrap();
+        assert!(host.is_match("test.example.test"));
+        assert!(!host.is_match("example.com"));
+        assert!(!host.is_match("test.test.test"));
+    }
+
+    #[test]
+    fn test_regex() {
+        let host = Host::new("^example.com$").unwrap();
+        assert!(host.is_match("example.com"));
+        assert!(!host.is_match("test.example.com"));
     }
 }
