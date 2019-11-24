@@ -86,6 +86,10 @@ test.com                ::
 import /other/hosts
 ```
 
+## Todo
+
+* Dynamically update port bindings
+
 ## Reference
 
 [Building a DNS server in Rust](https://github.com/EmilHernvall/dnsguide)

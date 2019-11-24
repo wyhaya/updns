@@ -353,7 +353,7 @@ async fn handle(mut req: BytePacketBuffer, len: usize) -> Result<Vec<u8>> {
 
     // Whether to proxy
     let answer = match get_answer(&query.name, query.qtype) {
-        Some(a) => a,
+        Some(record) => record,
         None => return proxy(&req.buf[..len]).await,
     };
 

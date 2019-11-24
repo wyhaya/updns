@@ -1,6 +1,7 @@
 use futures::future::{BoxFuture, FutureExt};
 use regex::Regex;
 use std::{
+    borrow::Cow,
     net::{IpAddr, SocketAddr},
     path::{Path, PathBuf},
     result,
@@ -12,64 +13,7 @@ use tokio::{
 };
 
 lazy_static! {
-    static ref REG_IGNORE: Regex = Regex::new(r#"^\s*(#.*)?$"#).unwrap();
-    static ref REG_BIND: Regex = Regex::new(r#"^\s*bind\s+(?P<val>[^\s#]+)"#).unwrap();
-    static ref REG_PROXY: Regex = Regex::new(r#"^\s*proxy\s+(?P<val>[^\s#]+)"#).unwrap();
-    static ref REG_TIMEOUT: Regex = Regex::new(r#"^\s*timeout\s+(?P<val>[^\s#]+)"#).unwrap();
-    // todo
-    // The path will also contain '#' and ' '
-    static ref REG_IMPORT: Regex = Regex::new(r#"^\s*import\s+(?P<val>(.*))$"#).unwrap();
-    static ref REG_DOMAIN_IP: Regex = Regex::new(r#"^\s*(?P<val1>[^\s#]+)\s+(?P<val2>[^\s#]+)"#).unwrap();
-}
-
-fn cap_socket_addr(reg: &Regex, text: &str) -> Option<result::Result<SocketAddr, InvalidType>> {
-    let cap = match reg.captures(text) {
-        Some(cap) => cap,
-        None => return None,
-    };
-
-    match cap.name("val") {
-        Some(m) => match m.as_str().parse() {
-            Ok(addr) => Some(Ok(addr)),
-            Err(_) => Some(Err(InvalidType::SocketAddr)),
-        },
-        None => Some(Err(InvalidType::SocketAddr)),
-    }
-}
-
-fn cap_ip_addr(text: &str) -> Option<result::Result<(Host, IpAddr), InvalidType>> {
-    let cap = match (&REG_DOMAIN_IP as &Regex).captures(text) {
-        Some(cap) => cap,
-        None => return None,
-    };
-
-    let (val1, val2) = match (cap.name("val1"), cap.name("val2")) {
-        (Some(val1), Some(val2)) => (val1.as_str(), val2.as_str()),
-        _ => {
-            return Some(Err(InvalidType::Other));
-        }
-    };
-
-    // ip domain
-    if let Ok(ip) = val1.parse() {
-        return match Host::new(val2) {
-            Ok(host) => Some(Ok((host, ip))),
-            Err(_) => Some(Err(InvalidType::Regex)),
-        };
-    }
-
-    // domain ip
-    let ip = match val2.parse() {
-        Ok(ip) => ip,
-        Err(_) => return Some(Err(InvalidType::IpAddr)),
-    };
-
-    let host = match Host::new(val1) {
-        Ok(reg) => reg,
-        Err(_) => return Some(Err(InvalidType::Regex)),
-    };
-
-    Some(Ok((host, ip)))
+    static ref COMMENT_REGEX: Regex = Regex::new("#.*$").unwrap();
 }
 
 #[derive(Debug)]
@@ -91,9 +35,9 @@ pub enum InvalidType {
 impl InvalidType {
     pub fn text(&self) -> &str {
         match self {
-            InvalidType::SocketAddr => "Cannot parse socket addr",
-            InvalidType::IpAddr => "Cannot parse ip addr",
-            InvalidType::Regex => "Cannot parse Regular expression",
+            InvalidType::SocketAddr => "Cannot parse socket address",
+            InvalidType::IpAddr => "Cannot parse ip address",
+            InvalidType::Regex => "Cannot parse regular expression",
             InvalidType::Timeout => "Cannot parse timeout",
             InvalidType::Other => "Invalid line",
         }
@@ -110,8 +54,8 @@ impl Hosts {
         Hosts { record: Vec::new() }
     }
 
-    fn push(&mut self, host: Host, ip: IpAddr) {
-        self.record.push((host, ip));
+    fn push(&mut self, record: (Host, IpAddr)) {
+        self.record.push(record);
     }
 
     fn extend(&mut self, hosts: Hosts) {
@@ -205,6 +149,7 @@ impl ParseConfig {
             timeout: None,
         }
     }
+
     fn extend(&mut self, other: Self) {
         self.bind.extend(other.bind);
         self.proxy.extend(other.proxy);
@@ -259,94 +204,100 @@ impl Config {
         }
     }
 
+    fn split(text: &str) -> Option<(&str, &str)> {
+        let mut text = text.split_ascii_whitespace();
+
+        if let (Some(left), Some(right)) = (text.next(), text.next()) {
+            if text.next().is_none() {
+                return Some((left, right));
+            }
+        }
+
+        None
+    }
+
+    fn parse_host(key: &str, value: &str) -> result::Result<(Host, IpAddr), InvalidType> {
+        // match host
+        // example.com 0.0.0.0
+        // 0.0.0.0 example.com
+
+        // ip domain
+        if let Ok(ip) = key.parse() {
+            return Host::new(value)
+                .map(|host| (host, ip))
+                .map_err(|_| InvalidType::Regex);
+        }
+
+        // domain ip
+        if let Ok(ip) = value.parse() {
+            return Host::new(key)
+                .map(|host| (host, ip))
+                .map_err(|_| InvalidType::Regex);
+        }
+
+        Err(InvalidType::IpAddr)
+    }
+
     pub fn parse(mut self) -> BoxFuture<'static, Result<ParseConfig>> {
         async move {
             let mut parse = ParseConfig::new();
 
             for (n, line) in self.read_to_string().await?.lines().enumerate() {
-                // ignore
-                if REG_IGNORE.is_match(&line) {
+                if line.is_empty() {
                     continue;
                 }
 
-                // bind
-                if let Some(addr) = cap_socket_addr(&REG_BIND, &line) {
-                    match addr {
+                // remove comment
+                // example # ... -> example
+                let line: Cow<str> = COMMENT_REGEX.replace(line, "");
+
+                if line.trim().is_empty() {
+                    continue;
+                }
+
+                macro_rules! invalid {
+                    ($type: expr) => {{
+                        parse.invalid.push(Invalid {
+                            line: n + 1,
+                            source: line.to_string(),
+                            kind: $type,
+                        });
+                        continue;
+                    }};
+                }
+
+                let (key, value) = match Self::split(&line) {
+                    Some(d) => d,
+                    None => invalid!(InvalidType::Other),
+                };
+
+                match key {
+                    "bind" => match value.parse::<SocketAddr>() {
                         Ok(addr) => parse.bind.push(addr),
-                        Err(kind) => parse.invalid.push(Invalid {
-                            line: n + 1,
-                            source: line.to_string(),
-                            kind,
-                        }),
-                    }
-                    continue;
-                }
-
-                // proxy
-                if let Some(addr) = cap_socket_addr(&REG_PROXY, &line) {
-                    match addr {
+                        Err(_) => invalid!(InvalidType::SocketAddr),
+                    },
+                    "proxy" => match value.parse::<SocketAddr>() {
                         Ok(addr) => parse.proxy.push(addr),
-                        Err(kind) => parse.invalid.push(Invalid {
-                            line: n + 1,
-                            source: line.to_string(),
-                            kind,
-                        }),
-                    }
-                    continue;
-                }
-
-                // timeout
-                if let Some(cap) = REG_TIMEOUT.captures(&line) {
-                    if let Some(time) = cap.name("val") {
-                        if let Ok(t) = time.as_str().parse::<u64>() {
-                            parse.timeout = Some(t);
-                            continue;
-                        }
-                    }
-                    parse.invalid.push(Invalid {
-                        line: n + 1,
-                        source: line.to_string(),
-                        kind: InvalidType::Timeout,
-                    });
-                    continue;
-                }
-
-                // import
-                if let Some(cap) = REG_IMPORT.captures(&line) {
-                    if let Some(m) = cap.name("val") {
-                        let mut p = Path::new(m.as_str()).to_path_buf();
-
-                        if p.is_relative() {
+                        Err(_) => invalid!(InvalidType::SocketAddr),
+                    },
+                    "timeout" => match value.parse::<u64>() {
+                        Ok(timeout) => parse.timeout = Some(timeout),
+                        Err(_) => invalid!(InvalidType::Timeout),
+                    },
+                    "import" => {
+                        let mut path = Path::new(value).to_path_buf();
+                        if path.is_relative() {
                             if let Some(parent) = self.path.parent() {
-                                p = parent.join(p);
+                                path = parent.join(path);
                             }
                         }
-
-                        parse.extend(Config::new(p).await?.parse().await?);
-                    } else {
-                        // todo
+                        parse.extend(Config::new(path).await?.parse().await?);
                     }
-                    continue;
+                    _ => match Self::parse_host(key, value) {
+                        Ok(record) => parse.hosts.push(record),
+                        Err(kind) => invalid!(kind),
+                    },
                 }
-
-                // host
-                if let Some(d) = cap_ip_addr(&line) {
-                    match d {
-                        Ok((host, ip)) => parse.hosts.push(host, ip),
-                        Err(kind) => parse.invalid.push(Invalid {
-                            line: n + 1,
-                            source: line.to_string(),
-                            kind,
-                        }),
-                    }
-                    continue;
-                }
-
-                parse.invalid.push(Invalid {
-                    line: n + 1,
-                    source: line.to_string(),
-                    kind: InvalidType::Other,
-                });
             }
 
             Ok(parse)
@@ -363,7 +314,7 @@ mod test_host {
     fn test_create() {}
 
     #[test]
-    fn test_test() {
+    fn test_text() {
         let host = Host::new("example.com").unwrap();
         assert!(host.is_match("example.com"));
         assert!(!host.is_match("-example.com"));
