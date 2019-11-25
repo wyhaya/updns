@@ -6,7 +6,7 @@ mod lib;
 mod watch;
 
 use ace::App;
-use config::{Config, Hosts, Invalid, ParseConfig};
+use config::{Config, Hosts, Invalid, Parser};
 use dirs;
 use lib::*;
 use regex::Regex;
@@ -31,11 +31,11 @@ const DEFAULT_BIND: &str = "0.0.0.0:53";
 const DEFAULT_PROXY: [&str; 2] = ["8.8.8.8:53", "1.1.1.1:53"];
 const DEFAULT_TIMEOUT: u64 = 2000;
 
+const WATCH_INTERVAL: u64 = 5000;
+
 static mut PROXY: Vec<SocketAddr> = Vec::new();
 static mut HOSTS: Option<Hosts> = None;
 static mut TIMEOUT: u64 = DEFAULT_TIMEOUT;
-
-const WATCH_INTERVAL: u64 = 5000;
 
 macro_rules! exit {
     ($($arg:tt)*) => {
@@ -95,10 +95,9 @@ async fn main() {
             if values.is_empty() {
                 exit!("'-w' value: [ms]");
             }
-            match values[0].parse::<u64>() {
-                Ok(t) => t,
-                Err(_) => exit!("Cannot resolve '{}' to number", &values[0]),
-            }
+            values[0]
+                .parse::<u64>()
+                .unwrap_or_else(|_| exit!("Cannot resolve '{}' to number", &values[0]))
         }
         None => WATCH_INTERVAL,
     };
@@ -111,6 +110,7 @@ async fn main() {
                     exit!("'add' value: [DOMAIN] [IP]");
                 }
 
+                // Check is positive
                 if let Err(err) = Regex::new(values[0]) {
                     exit!(
                         "Cannot resolve '{}' to regular expression\n{:?}",
@@ -122,11 +122,11 @@ async fn main() {
                     exit!("Cannot resolve '{}' to ip address", values[1]);
                 }
 
-                let mut config = match Config::new(&config_path).await {
-                    Ok(c) => c,
-                    Err(err) => exit!("Failed to read config file {:?}\n{:?}", &config_path, err),
-                };
-                if let Err(err) = config.add(values[0], values[1]).await {
+                let mut parser = Parser::new(&config_path).await.unwrap_or_else(|err| {
+                    exit!("Failed to read config file {:?}\n{:?}", &config_path, err)
+                });
+
+                if let Err(err) = parser.add(values[0], values[1]).await {
                     exit!("Add record failed\n{:?}", err);
                 }
             }
@@ -144,27 +144,25 @@ async fn main() {
                 }
             }
             "config" => {
-                let cmd = Command::new("vim").arg(&config_path).status();
-                match cmd {
-                    Ok(status) => {
-                        if status.success() {
-                            config_parse(&config_path).await;
-                        } else {
-                            println!("'vim' exits with a non-zero status code: {:?}", status);
-                        }
-                    }
-                    Err(err) => exit!("Call 'vim' command failed\n{:?}", err),
+                let status = Command::new("vim")
+                    .arg(&config_path)
+                    .status()
+                    .unwrap_or_else(|err| exit!("Call 'vim' command failed\n{:?}", err));
+
+                if status.success() {
+                    config_parse(&config_path).await;
+                } else {
+                    println!("'vim' exits with a non-zero status code: {:?}", status);
                 }
             }
             "path" => {
-                let binary = match env::current_exe() {
-                    Ok(p) => p.display().to_string(),
-                    Err(err) => exit!("Failed to get directory\n{:?}", err),
-                };
+                let binary = env::current_exe()
+                    .unwrap_or_else(|err| exit!("Failed to get directory\n{:?}", err));
+
                 println!(
                     "Binary: {}\nConfig: {}",
-                    binary,
-                    config_path.to_string_lossy()
+                    binary.display(),
+                    config_path.display()
                 );
             }
             "help" => app.help(),
@@ -174,22 +172,22 @@ async fn main() {
         return;
     }
 
-    let mut parse = config_parse(&config_path).await;
-    if parse.bind.is_empty() {
+    let mut config = config_parse(&config_path).await;
+    if config.bind.is_empty() {
         warn!("Will bind the default address '{}'", DEFAULT_BIND);
-        parse.bind.push(DEFAULT_BIND.parse().unwrap());
+        config.bind.push(DEFAULT_BIND.parse().unwrap());
     }
-    if parse.proxy.is_empty() {
+    if config.proxy.is_empty() {
         warn!(
             "Will use the default proxy address '{}'",
             DEFAULT_PROXY.join(", ")
         );
     }
 
-    update_config(parse.proxy, parse.hosts, parse.timeout);
+    update_config(config.proxy, config.hosts, config.timeout);
 
     // Run server
-    for addr in parse.bind {
+    for addr in config.bind {
         tokio::spawn(run_server(addr));
     }
     // watch config
@@ -210,19 +208,18 @@ fn update_config(mut proxy: Vec<SocketAddr>, hosts: Hosts, timeout: Option<u64>)
     };
 }
 
-async fn config_parse(file: &PathBuf) -> ParseConfig {
-    let config = match Config::new(file).await {
-        Ok(c) => c,
-        Err(err) => exit!("Failed to read config file {:?}\n{:?}", file, err),
-    };
+async fn config_parse(file: &PathBuf) -> Config {
+    let parser = Parser::new(file)
+        .await
+        .unwrap_or_else(|err| exit!("Failed to read config file {:?}\n{:?}", file, err));
 
-    let parse: ParseConfig = match config.parse().await {
-        Ok(d) => d,
-        Err(err) => exit!("Parsing config file failed\n{:?}", err),
-    };
-    output_invalid(&parse.invalid);
+    let config: Config = parser
+        .parse()
+        .await
+        .unwrap_or_else(|err| exit!("Parsing config file failed\n{:?}", err));
 
-    parse
+    output_invalid(&config.invalid);
+    config
 }
 
 fn output_invalid(errors: &[Invalid]) {
@@ -230,7 +227,7 @@ fn output_invalid(errors: &[Invalid]) {
         error!(
             "[line:{}] {} `{}`",
             invalid.line,
-            invalid.kind.text(),
+            invalid.kind.as_str(),
             invalid.source
         );
     }
@@ -238,12 +235,13 @@ fn output_invalid(errors: &[Invalid]) {
 
 async fn watch_config(p: PathBuf, t: u64) {
     let mut watch = Watch::new(&p, t).await;
+
     while let Some(_) = watch.next().await {
         info!("Reload the configuration file: {:?}", &p);
-        if let Ok(config) = Config::new(&p).await {
-            if let Ok(parse) = config.parse().await {
-                update_config(parse.proxy, parse.hosts, parse.timeout);
-                output_invalid(&parse.invalid);
+        if let Ok(parser) = Parser::new(&p).await {
+            if let Ok(config) = parser.parse().await {
+                update_config(config.proxy, config.hosts, config.timeout);
+                output_invalid(&config.invalid);
             }
         }
     }
@@ -260,6 +258,7 @@ async fn run_server(addr: SocketAddr) {
 
     loop {
         let mut req = BytePacketBuffer::new();
+
         let (len, src) = match socket.recv_from(&mut req.buf).await {
             Ok(r) => r,
             Err(err) => {
@@ -267,6 +266,7 @@ async fn run_server(addr: SocketAddr) {
                 continue;
             }
         };
+
         let res = match handle(req, len).await {
             Ok(data) => data,
             Err(err) => {
@@ -274,6 +274,7 @@ async fn run_server(addr: SocketAddr) {
                 continue;
             }
         };
+
         if let Err(err) = socket.send_to(&res, &src).await {
             error!("Replying to '{}' failed {:?}", &src, err);
         }

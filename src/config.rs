@@ -8,7 +8,8 @@ use std::{
     slice::Iter,
 };
 use tokio::{
-    fs::{create_dir_all, File, OpenOptions},
+    fs,
+    fs::{File, OpenOptions},
     io::{AsyncReadExt, AsyncWriteExt, Result},
 };
 
@@ -33,7 +34,7 @@ pub enum InvalidType {
 }
 
 impl InvalidType {
-    pub fn text(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         match self {
             InvalidType::SocketAddr => "Cannot parse socket address",
             InvalidType::IpAddr => "Cannot parse ip address",
@@ -131,7 +132,7 @@ impl Host {
 }
 
 #[derive(Debug)]
-pub struct ParseConfig {
+pub struct Config {
     pub bind: Vec<SocketAddr>,
     pub proxy: Vec<SocketAddr>,
     pub hosts: Hosts,
@@ -139,9 +140,9 @@ pub struct ParseConfig {
     pub invalid: Vec<Invalid>,
 }
 
-impl ParseConfig {
-    fn new() -> ParseConfig {
-        ParseConfig {
+impl Config {
+    fn new() -> Config {
+        Config {
             hosts: Hosts::new(),
             bind: Vec::new(),
             proxy: Vec::new(),
@@ -162,20 +163,20 @@ impl ParseConfig {
 }
 
 #[derive(Debug)]
-pub struct Config {
+pub struct Parser {
     path: PathBuf,
     file: File,
 }
 
-impl Config {
-    pub async fn new<P: AsRef<Path>>(path: P) -> Result<Config> {
+impl Parser {
+    pub async fn new<P: AsRef<Path>>(path: P) -> Result<Parser> {
         let path = path.as_ref();
 
         if let Some(dir) = path.parent() {
-            create_dir_all(dir).await?;
+            fs::create_dir_all(dir).await?;
         }
 
-        Ok(Config {
+        Ok(Parser {
             file: OpenOptions::new()
                 .read(true)
                 .append(true)
@@ -216,21 +217,20 @@ impl Config {
         None
     }
 
-    fn parse_host(key: &str, value: &str) -> result::Result<(Host, IpAddr), InvalidType> {
-        // match host
-        // example.com 0.0.0.0
-        // 0.0.0.0 example.com
-
+    // match host
+    // example.com 0.0.0.0
+    // 0.0.0.0 example.com
+    fn record(left: &str, right: &str) -> result::Result<(Host, IpAddr), InvalidType> {
         // ip domain
-        if let Ok(ip) = key.parse() {
-            return Host::new(value)
+        if let Ok(ip) = right.parse() {
+            return Host::new(left)
                 .map(|host| (host, ip))
                 .map_err(|_| InvalidType::Regex);
         }
 
         // domain ip
-        if let Ok(ip) = value.parse() {
-            return Host::new(key)
+        if let Ok(ip) = left.parse() {
+            return Host::new(right)
                 .map(|host| (host, ip))
                 .map_err(|_| InvalidType::Regex);
         }
@@ -238,27 +238,26 @@ impl Config {
         Err(InvalidType::IpAddr)
     }
 
-    pub fn parse(mut self) -> BoxFuture<'static, Result<ParseConfig>> {
+    pub fn parse(mut self) -> BoxFuture<'static, Result<Config>> {
         async move {
-            let mut parse = ParseConfig::new();
+            let content = self.read_to_string().await?;
+            let mut config = Config::new();
 
-            for (n, line) in self.read_to_string().await?.lines().enumerate() {
+            for (i, line) in content.lines().enumerate() {
                 if line.is_empty() {
                     continue;
                 }
-
                 // remove comment
                 // example # ... -> example
                 let line: Cow<str> = COMMENT_REGEX.replace(line, "");
-
                 if line.trim().is_empty() {
                     continue;
                 }
 
                 macro_rules! invalid {
                     ($type: expr) => {{
-                        parse.invalid.push(Invalid {
-                            line: n + 1,
+                        config.invalid.push(Invalid {
+                            line: i + 1,
                             source: line.to_string(),
                             kind: $type,
                         });
@@ -273,15 +272,15 @@ impl Config {
 
                 match key {
                     "bind" => match value.parse::<SocketAddr>() {
-                        Ok(addr) => parse.bind.push(addr),
+                        Ok(addr) => config.bind.push(addr),
                         Err(_) => invalid!(InvalidType::SocketAddr),
                     },
                     "proxy" => match value.parse::<SocketAddr>() {
-                        Ok(addr) => parse.proxy.push(addr),
+                        Ok(addr) => config.proxy.push(addr),
                         Err(_) => invalid!(InvalidType::SocketAddr),
                     },
                     "timeout" => match value.parse::<u64>() {
-                        Ok(timeout) => parse.timeout = Some(timeout),
+                        Ok(timeout) => config.timeout = Some(timeout),
                         Err(_) => invalid!(InvalidType::Timeout),
                     },
                     "import" => {
@@ -291,16 +290,16 @@ impl Config {
                                 path = parent.join(path);
                             }
                         }
-                        parse.extend(Config::new(path).await?.parse().await?);
+                        config.extend(Parser::new(path).await?.parse().await?);
                     }
-                    _ => match Self::parse_host(key, value) {
-                        Ok(record) => parse.hosts.push(record),
+                    _ => match Self::record(key, value) {
+                        Ok(record) => config.hosts.push(record),
                         Err(kind) => invalid!(kind),
                     },
                 }
             }
 
-            Ok(parse)
+            Ok(config)
         }
             .boxed()
     }

@@ -1,6 +1,6 @@
 [package]
 name = "updns"
-version = "0.0.7"
+version = "0.1.0"
 edition = "2018"
 
 authors = ["wyhaya <wyhaya@gmail.com>"]
