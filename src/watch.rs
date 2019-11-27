@@ -1,11 +1,15 @@
-use futures::ready;
+use futures::{prelude::*, ready};
 use std::{
     path::{Path, PathBuf},
     pin::Pin,
     task::{Context, Poll},
     time::{Duration, SystemTime},
 };
-use tokio::{fs::File, io::Result, prelude::*, timer::Interval};
+use tokio::{
+    fs::File,
+    io::Result,
+    time::{interval, Interval},
+};
 
 pub struct Watch {
     path: PathBuf,
@@ -21,7 +25,7 @@ impl Watch {
             path: path.clone(),
             state: None,
             modified: Self::modified(path).await,
-            timer: Interval::new_interval(Duration::from_millis(duration)),
+            timer: interval(Duration::from_millis(duration)),
         }
     }
 

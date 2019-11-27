@@ -8,6 +8,7 @@ mod watch;
 use ace::App;
 use config::{Config, Hosts, Invalid, Parser};
 use dirs;
+use futures::prelude::*;
 use lib::*;
 use regex::Regex;
 use std::{
@@ -20,8 +21,7 @@ use std::{
 use tokio::{
     io::{Error, ErrorKind, Result},
     net::UdpSocket,
-    prelude::*,
-    timer::Timeout,
+    time::timeout,
 };
 use watch::Watch;
 
@@ -287,15 +287,12 @@ async fn proxy(buf: &[u8]) -> Result<Vec<u8>> {
     for addr in proxy.iter() {
         let mut socket = UdpSocket::bind(("0.0.0.0", 0)).await?;
 
-        let data: Result<Vec<u8>> = Timeout::new(
-            async {
-                socket.send_to(&buf, addr).await?;
-                let mut res = [0; 512];
-                let len = socket.recv(&mut res).await?;
-                Ok(res[..len].to_vec())
-            },
-            Duration::from_millis(unsafe { TIMEOUT }),
-        )
+        let data: Result<Vec<u8>> = timeout(Duration::from_millis(unsafe { TIMEOUT }), async {
+            socket.send_to(&buf, addr).await?;
+            let mut res = [0; 512];
+            let len = socket.recv(&mut res).await?;
+            Ok(res[..len].to_vec())
+        })
         .await?;
 
         match data {
