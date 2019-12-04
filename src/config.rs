@@ -80,6 +80,9 @@ impl Hosts {
 }
 
 // domain match
+const TEXT: &str = "abcdefghijklmnopqrstuvwxyz0123456789-.";
+const WILDCARD: &str = "abcdefghijklmnopqrstuvwxyz0123456789-.*";
+
 #[derive(Debug)]
 pub struct Host(MatchMode);
 
@@ -107,13 +110,11 @@ impl Host {
     }
 
     fn is_text(domain: &str) -> bool {
-        const ALLOW: &str = "abcdefghijklmnopqrstuvwxyz0123456789-.";
-        domain.chars().all(|item| ALLOW.chars().any(|c| item == c))
+        domain.chars().all(|item| TEXT.chars().any(|c| item == c))
     }
 
     fn is_wildcard(domain: &str) -> bool {
-        const ALLOW: &str = "abcdefghijklmnopqrstuvwxyz0123456789-.*";
-        domain.chars().all(|item| ALLOW.chars().any(|c| item == c))
+        domain.chars().all(|item| WILDCARD.chars().any(|c| item == c))
     }
 
     pub fn is_match(&self, domain: &str) -> bool {

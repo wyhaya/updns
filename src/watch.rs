@@ -40,10 +40,10 @@ impl Watch {
                 return true;
             }
         } else if a.is_err() && b.is_err() {
-            let left = a.as_ref().err().unwrap();
-            let right = b.as_ref().err().unwrap();
-            if left.kind() == right.kind() && left.raw_os_error() == right.raw_os_error() {
-                return true;
+            if let (Some(left), Some(right)) = (a.as_ref().err(), b.as_ref().err()) {
+                if left.kind() == right.kind() && left.raw_os_error() == right.raw_os_error() {
+                    return true;
+                }
             }
         }
         false
