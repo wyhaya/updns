@@ -114,7 +114,9 @@ impl Host {
     }
 
     fn is_wildcard(domain: &str) -> bool {
-        domain.chars().all(|item| WILDCARD.chars().any(|c| item == c))
+        domain
+            .chars()
+            .all(|item| WILDCARD.chars().any(|c| item == c))
     }
 
     pub fn is_match(&self, domain: &str) -> bool {
