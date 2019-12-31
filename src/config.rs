@@ -1,3 +1,4 @@
+use crate::matcher::Matcher;
 use futures::future::{BoxFuture, FutureExt};
 use regex::Regex;
 use std::{
@@ -34,7 +35,7 @@ pub enum InvalidType {
 }
 
 impl InvalidType {
-    pub fn as_str(&self) -> &str {
+    pub fn description(&self) -> &str {
         match self {
             InvalidType::SocketAddr => "Cannot parse socket address",
             InvalidType::IpAddr => "Cannot parse ip address",
@@ -47,7 +48,7 @@ impl InvalidType {
 
 #[derive(Debug)]
 pub struct Hosts {
-    record: Vec<(Host, IpAddr)>,
+    record: Vec<(Matcher, IpAddr)>,
 }
 
 impl Hosts {
@@ -55,7 +56,7 @@ impl Hosts {
         Hosts { record: Vec::new() }
     }
 
-    fn push(&mut self, record: (Host, IpAddr)) {
+    fn push(&mut self, record: (Matcher, IpAddr)) {
         self.record.push(record);
     }
 
@@ -65,7 +66,7 @@ impl Hosts {
         }
     }
 
-    pub fn iter(&mut self) -> Iter<(Host, IpAddr)> {
+    pub fn iter(&mut self) -> Iter<(Matcher, IpAddr)> {
         self.record.iter()
     }
 
@@ -76,61 +77,6 @@ impl Hosts {
             }
         }
         None
-    }
-}
-
-// domain match
-const TEXT: &str = "abcdefghijklmnopqrstuvwxyz0123456789-.";
-const WILDCARD: &str = "abcdefghijklmnopqrstuvwxyz0123456789-.*";
-
-#[derive(Debug)]
-pub struct Host(MatchMode);
-
-#[derive(Debug)]
-enum MatchMode {
-    Text(String),
-    Regex(Regex),
-}
-
-impl Host {
-    fn new(domain: &str) -> result::Result<Host, regex::Error> {
-        // example.com
-        if Self::is_text(domain) {
-            return Ok(Host(MatchMode::Text(domain.to_string())));
-        }
-
-        // *.example.com
-        if Self::is_wildcard(domain) {
-            let s = format!("^{}$", domain.replace(".", r"\.").replace("*", r"[^.]+"));
-            return Ok(Host(MatchMode::Regex(Regex::new(&s)?)));
-        }
-
-        // use regex
-        Ok(Host(MatchMode::Regex(Regex::new(domain)?)))
-    }
-
-    fn is_text(domain: &str) -> bool {
-        domain.chars().all(|item| TEXT.chars().any(|c| item == c))
-    }
-
-    fn is_wildcard(domain: &str) -> bool {
-        domain
-            .chars()
-            .all(|item| WILDCARD.chars().any(|c| item == c))
-    }
-
-    pub fn is_match(&self, domain: &str) -> bool {
-        match &self.0 {
-            MatchMode::Text(text) => text == domain,
-            MatchMode::Regex(reg) => reg.is_match(domain),
-        }
-    }
-
-    pub fn as_str(&self) -> &str {
-        match &self.0 {
-            MatchMode::Text(text) => text,
-            MatchMode::Regex(reg) => reg.as_str(),
-        }
     }
 }
 
@@ -223,17 +169,17 @@ impl Parser {
     // match host
     // example.com 0.0.0.0
     // 0.0.0.0 example.com
-    fn record(left: &str, right: &str) -> result::Result<(Host, IpAddr), InvalidType> {
+    fn record(left: &str, right: &str) -> result::Result<(Matcher, IpAddr), InvalidType> {
         // ip domain
         if let Ok(ip) = right.parse() {
-            return Host::new(left)
+            return Matcher::new(left)
                 .map(|host| (host, ip))
                 .map_err(|_| InvalidType::Regex);
         }
 
         // domain ip
         if let Ok(ip) = left.parse() {
-            return Host::new(right)
+            return Matcher::new(right)
                 .map(|host| (host, ip))
                 .map_err(|_| InvalidType::Regex);
         }
@@ -305,41 +251,5 @@ impl Parser {
             Ok(config)
         }
             .boxed()
-    }
-}
-
-#[cfg(test)]
-mod test_host {
-    use super::*;
-
-    #[test]
-    fn test_create() {}
-
-    #[test]
-    fn test_text() {
-        let host = Host::new("example.com").unwrap();
-        assert!(host.is_match("example.com"));
-        assert!(!host.is_match("-example.com"));
-        assert!(!host.is_match("example.com.cn"));
-    }
-
-    #[test]
-    fn test_wildcard() {
-        let host = Host::new("*.example.com").unwrap();
-        assert!(host.is_match("test.example.com"));
-        assert!(!host.is_match("test.example.test"));
-        assert!(!host.is_match("test.test.com"));
-
-        let host = Host::new("*.example.*").unwrap();
-        assert!(host.is_match("test.example.test"));
-        assert!(!host.is_match("example.com"));
-        assert!(!host.is_match("test.test.test"));
-    }
-
-    #[test]
-    fn test_regex() {
-        let host = Host::new("^example.com$").unwrap();
-        assert!(host.is_match("example.com"));
-        assert!(!host.is_match("test.example.com"));
     }
 }

@@ -3,6 +3,7 @@ extern crate lazy_static;
 
 mod config;
 mod lib;
+mod matcher;
 mod watch;
 
 use ace::App;
@@ -136,11 +137,11 @@ async fn main() {
                 let n = config
                     .hosts
                     .iter()
-                    .map(|(r, _)| r.as_str().len())
+                    .map(|(m, _)| m.to_string().len())
                     .fold(0, |a, b| a.max(b));
 
                 for (host, ip) in config.hosts.iter() {
-                    println!("{:domain$}    {}", host.as_str(), ip, domain = n);
+                    println!("{:domain$}    {}", host.to_string(), ip, domain = n);
                 }
             }
             "config" => {
@@ -227,7 +228,7 @@ fn output_invalid(errors: &[Invalid]) {
         error!(
             "[line:{}] {} `{}`",
             invalid.line,
-            invalid.kind.as_str(),
+            invalid.kind.description(),
             invalid.source
         );
     }
