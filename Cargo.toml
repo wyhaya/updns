@@ -1,6 +1,6 @@
 [package]
 name = "updns"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2018"
 
 authors = ["wyhaya <wyhaya@gmail.com>"]
@@ -18,10 +18,11 @@ keywords = [
 ]
 
 [dependencies]
-ace = "0.0.3"
+ace = "0.1.0"
 dirs = "2.0.2"
 futures = "0.3.1"
 lazy_static = "1.4.0"
-regex = "1.3.1"
+log = { version = "0.4.8", features = ["max_level_trace", "release_max_level_info"] }
+regex = "1.3.3"
 time = "0.1.42"
-tokio = {version = "0.2.6", features = ["fs", "io-util",  "macros", "net", "stream", "time"]}
+tokio = { version = "0.2.9", features = ["fs", "io-util",  "macros", "net", "stream", "time"] }

@@ -1,8 +1,6 @@
-#[macro_use]
-extern crate lazy_static;
-
 mod config;
 mod lib;
+mod logger;
 mod matcher;
 mod watch;
 
@@ -11,6 +9,7 @@ use config::{Config, Hosts, Invalid, Parser};
 use dirs;
 use futures::prelude::*;
 use lib::*;
+use log::*;
 use regex::Regex;
 use std::{
     env,
@@ -30,13 +29,13 @@ const CONFIG_FILE: [&str; 2] = [".updns", "config"];
 
 const DEFAULT_BIND: &str = "0.0.0.0:53";
 const DEFAULT_PROXY: [&str; 2] = ["8.8.8.8:53", "1.1.1.1:53"];
-const DEFAULT_TIMEOUT: u64 = 2000;
+const DEFAULT_TIMEOUT: Duration = Duration::from_millis(2000);
 
-const WATCH_INTERVAL: u64 = 5000;
+const WATCH_INTERVAL: Duration = Duration::from_millis(5000);
 
 static mut PROXY: Vec<SocketAddr> = Vec::new();
 static mut HOSTS: Option<Hosts> = None;
-static mut TIMEOUT: u64 = DEFAULT_TIMEOUT;
+static mut TIMEOUT: Duration = DEFAULT_TIMEOUT;
 
 macro_rules! exit {
     ($($arg:tt)*) => {
@@ -46,27 +45,11 @@ macro_rules! exit {
         }
     };
 }
-macro_rules! error {
-    ($($arg:tt)*) => {
-        eprint!("{} ERROR ", time::now().strftime("[%Y-%m-%d %H:%M:%S]").unwrap());
-        eprintln!($($arg)*);
-    };
-}
-macro_rules! info {
-    ($($arg:tt)*) => {
-        print!("{} INFO ", time::now().strftime("[%Y-%m-%d %H:%M:%S]").unwrap());
-        println!($($arg)*);
-    };
-}
-macro_rules! warn {
-    ($($arg:tt)*) => {
-        print!("{} WARN ", time::now().strftime("[%Y-%m-%d %H:%M:%S]").unwrap());
-        println!($($arg)*);
-    };
-}
 
 #[tokio::main]
 async fn main() {
+    let _ = logger::init();
+
     let app = App::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"))
         .cmd("add", "Add a DNS record")
         .cmd("ls", "Print all configured DNS records")
@@ -75,12 +58,18 @@ async fn main() {
         .cmd("help", "Print help information")
         .cmd("version", "Print version information")
         .opt("-c", "Specify a config file")
-        .opt("-w", "Check the interval of the configuration file (ms)");
+        .opt(
+            "-i",
+            vec![
+                "Check the interval time of the configuration file",
+                "format: 1ms, 1s, 1m, 1h, 1d",
+            ],
+        );
 
     let config_path = match app.value("-c") {
         Some(values) => {
             if values.is_empty() {
-                exit!("'-c' value: [CONFIG]");
+                exit!("'-c' missing a value: [FILE]");
             }
             PathBuf::from(values[0])
         }
@@ -91,14 +80,17 @@ async fn main() {
     };
 
     // Check profile interval
-    let watch_interval = match app.value("-w") {
+    let watch_interval = match app.value("-i") {
         Some(values) => {
             if values.is_empty() {
-                exit!("'-w' value: [ms]");
+                exit!("'-i' missing a value: : [1ms, 1s, 1m, 1h, 1d]");
             }
-            values[0]
-                .parse::<u64>()
-                .unwrap_or_else(|_| exit!("Cannot resolve '{}' to number", &values[0]))
+            config::try_parse_duration(values[0]).unwrap_or_else(|_| {
+                exit!(
+                    "Cannot resolve '{}' to interval time, format: 1ms, 1s, 1m, 1h, 1d",
+                    &values[0]
+                )
+            })
         }
         None => WATCH_INTERVAL,
     };
@@ -166,9 +158,9 @@ async fn main() {
                     config_path.display()
                 );
             }
-            "help" => app.help(),
-            "version" => app.version(),
-            _ => app.error_try("help"),
+            "help" => app.print_help(),
+            "version" => app.print_version(),
+            _ => app.print_error_try("help"),
         }
         return;
     }
@@ -195,7 +187,7 @@ async fn main() {
     watch_config(config_path, watch_interval).await;
 }
 
-fn update_config(mut proxy: Vec<SocketAddr>, hosts: Hosts, timeout: Option<u64>) {
+fn update_config(mut proxy: Vec<SocketAddr>, hosts: Hosts, timeout: Option<Duration>) {
     if proxy.is_empty() {
         proxy = DEFAULT_PROXY
             .iter()
@@ -234,7 +226,7 @@ fn output_invalid(errors: &[Invalid]) {
     }
 }
 
-async fn watch_config(p: PathBuf, t: u64) {
+async fn watch_config(p: PathBuf, t: Duration) {
     let mut watch = Watch::new(&p, t).await;
 
     while let Some(_) = watch.next().await {
@@ -288,7 +280,7 @@ async fn proxy(buf: &[u8]) -> Result<Vec<u8>> {
     for addr in proxy.iter() {
         let mut socket = UdpSocket::bind(("0.0.0.0", 0)).await?;
 
-        let data: Result<Vec<u8>> = timeout(Duration::from_millis(unsafe { TIMEOUT }), async {
+        let data: Result<Vec<u8>> = timeout(unsafe { TIMEOUT }, async {
             socket.send_to(&buf, addr).await?;
             let mut res = [0; 512];
             let len = socket.recv(&mut res).await?;

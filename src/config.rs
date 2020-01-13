@@ -1,5 +1,6 @@
 use crate::matcher::Matcher;
 use futures::future::{BoxFuture, FutureExt};
+use lazy_static::lazy_static;
 use regex::Regex;
 use std::{
     borrow::Cow,
@@ -7,6 +8,7 @@ use std::{
     path::{Path, PathBuf},
     result,
     slice::Iter,
+    time::Duration,
 };
 use tokio::{
     fs,
@@ -16,6 +18,32 @@ use tokio::{
 
 lazy_static! {
     static ref COMMENT_REGEX: Regex = Regex::new("#.*$").unwrap();
+}
+
+// Parse time format into Duration
+pub fn try_parse_duration(text: &str) -> result::Result<Duration, ()> {
+    lazy_static! {
+        static ref REGEX_MATCH_TIME: Regex =
+            Regex::new(r"^(?P<time>\d+(\.\d+)?)(?P<unit>d|h|m|s|ms)$").unwrap();
+    }
+    let reg: &Regex = &REGEX_MATCH_TIME;
+
+    let cap = reg.captures(text).ok_or_else(|| ())?;
+    let time = cap.name("time").unwrap();
+    let unit = cap.name("unit").unwrap();
+
+    let n = time.as_str().parse::<f64>().map_err(|_| ())?;
+
+    let ms = match unit.as_str() {
+        "d" => 24_f64 * 60_f64 * 60_f64 * 1000_f64 * n,
+        "h" => 60_f64 * 60_f64 * 1000_f64 * n,
+        "m" => 60_f64 * 1000_f64 * n,
+        "s" => 1000_f64 * n,
+        "ms" => n,
+        _ => panic!(),
+    };
+
+    Ok(Duration::from_millis(ms as u64))
 }
 
 #[derive(Debug)]
@@ -85,7 +113,7 @@ pub struct Config {
     pub bind: Vec<SocketAddr>,
     pub proxy: Vec<SocketAddr>,
     pub hosts: Hosts,
-    pub timeout: Option<u64>,
+    pub timeout: Option<Duration>,
     pub invalid: Vec<Invalid>,
 }
 
@@ -228,7 +256,7 @@ impl Parser {
                         Ok(addr) => config.proxy.push(addr),
                         Err(_) => invalid!(InvalidType::SocketAddr),
                     },
-                    "timeout" => match value.parse::<u64>() {
+                    "timeout" => match try_parse_duration(value) {
                         Ok(timeout) => config.timeout = Some(timeout),
                         Err(_) => invalid!(InvalidType::Timeout),
                     },

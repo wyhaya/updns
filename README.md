@@ -51,14 +51,15 @@ Usage:
 Command:
     add        Add a DNS record
     ls         Print all configured DNS records
-    config     Call vim to edit the configuration file
+    config     Call 'vim' to edit the configuration file
     path       Print related directories
     help       Print help information
     version    Print version information
 
 Option:
     -c    Specify a config file
-    -w    Check the interval of the configuration file
+    -i    Check the interval time of the configuration file
+          format: 1ms, 1s, 1m, 1h, 1d
 ```
 
 ## Config

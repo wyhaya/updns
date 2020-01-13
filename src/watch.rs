@@ -19,13 +19,13 @@ pub struct Watch {
 }
 
 impl Watch {
-    pub async fn new<P: AsRef<Path>>(path: P, duration: u64) -> Watch {
+    pub async fn new<P: AsRef<Path>>(path: P, duration: Duration) -> Watch {
         let path = path.as_ref().to_path_buf();
         Watch {
             path: path.clone(),
             state: None,
             modified: Self::modified(path).await,
-            timer: interval(Duration::from_millis(duration)),
+            timer: interval(duration),
         }
     }
 
