@@ -73,7 +73,7 @@ You can specify standard domains, or utilize [regular expressions](https://ruste
 ```ini
 bind     0.0.0.0:53      # Binding address
 proxy    8.8.8.8:53      # Proxy address
-timeout  2000            # Proxy timeout (ms)
+timeout  2s              # Proxy timeout (format: 1ms, 1s, 1m, 1h, 1d)
 
 # Domain matching
 example.com              1.1.1.1
