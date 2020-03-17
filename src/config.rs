@@ -283,6 +283,6 @@ impl Parser {
 
             Ok(config)
         }
-            .boxed()
+        .boxed()
     }
 }
