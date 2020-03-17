@@ -22,28 +22,33 @@ lazy_static! {
 
 // Parse time format into Duration
 pub fn try_parse_duration(text: &str) -> result::Result<Duration, ()> {
-    lazy_static! {
-        static ref REGEX_MATCH_TIME: Regex =
-            Regex::new(r"^(?P<time>\d+(\.\d+)?)(?P<unit>d|h|m|s|ms)$").unwrap();
+    let numbers = "0123456789.".chars().collect::<Vec<char>>();
+    let i = text
+        .chars()
+        .position(|ch| !numbers.contains(&ch))
+        .ok_or_else(|| ())?;
+
+    let time = &text[..i];
+    let unit = &text[i..];
+
+    if time.is_empty() {
+        return Err(());
     }
-    let reg: &Regex = &REGEX_MATCH_TIME;
+    let n = time.parse::<f64>().map_err(|_| ())?;
+    let ms = match unit {
+        "d" => Ok(24_f64 * 60_f64 * 60_f64 * 1000_f64 * n),
+        "h" => Ok(60_f64 * 60_f64 * 1000_f64 * n),
+        "m" => Ok(60_f64 * 1000_f64 * n),
+        "s" => Ok(1000_f64 * n),
+        "ms" => Ok(n),
+        _ => Err(()),
+    }? as u64;
 
-    let cap = reg.captures(text).ok_or_else(|| ())?;
-    let time = cap.name("time").unwrap();
-    let unit = cap.name("unit").unwrap();
-
-    let n = time.as_str().parse::<f64>().map_err(|_| ())?;
-
-    let ms = match unit.as_str() {
-        "d" => 24_f64 * 60_f64 * 60_f64 * 1000_f64 * n,
-        "h" => 60_f64 * 60_f64 * 1000_f64 * n,
-        "m" => 60_f64 * 1000_f64 * n,
-        "s" => 1000_f64 * n,
-        "ms" => n,
-        _ => panic!(),
-    };
-
-    Ok(Duration::from_millis(ms as u64))
+    if ms == 0 {
+        Err(())
+    } else {
+        Ok(Duration::from_millis(ms))
+    }
 }
 
 #[derive(Debug)]
