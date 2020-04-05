@@ -1,6 +1,7 @@
 use crate::matcher::Matcher;
 use futures::future::{BoxFuture, FutureExt};
 use lazy_static::lazy_static;
+use log::error;
 use regex::Regex;
 use std::{
     borrow::Cow,
@@ -56,6 +57,23 @@ pub struct Invalid {
     pub line: usize,
     pub source: String,
     pub kind: InvalidType,
+}
+
+pub trait MultipleInvalid {
+    fn print(&self);
+}
+
+impl MultipleInvalid for Vec<Invalid> {
+    fn print(&self) {
+        for invalid in self {
+            error!(
+                "[line:{}] {} `{}`",
+                invalid.line,
+                invalid.kind.description(),
+                invalid.source
+            );
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -200,8 +218,7 @@ impl Parser {
     }
 
     // match host
-    // example.com 0.0.0.0
-    // 0.0.0.0 example.com
+    // example.com 0.0.0.0  or  0.0.0.0 example.com
     fn record(left: &str, right: &str) -> result::Result<(Matcher, IpAddr), InvalidType> {
         // ip domain
         if let Ok(ip) = right.parse() {
@@ -266,7 +283,7 @@ impl Parser {
                         Err(_) => invalid!(InvalidType::Timeout),
                     },
                     "import" => {
-                        let mut path = Path::new(value).to_path_buf();
+                        let mut path = PathBuf::from(value);
                         if path.is_relative() {
                             if let Some(parent) = self.path.parent() {
                                 path = parent.join(path);
