@@ -56,7 +56,7 @@ async fn main() {
 
     let app = App::new()
         .name(env!("CARGO_PKG_NAME"))
-        .desc(env!("CARGO_PKG_VERSION"))
+        .version(env!("CARGO_PKG_VERSION"))
         .cmd("add", "Add a DNS record")
         .cmd("ls", "Print all configured DNS records")
         .cmd("config", "Call 'vim' to edit the configuration file")
