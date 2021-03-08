@@ -33,15 +33,15 @@ pub fn parse_args() -> AppRunType {
             SubCommand::with_name("add")
                 .about("Add a DNS record")
                 .arg(
-                    Arg::with_name("ip")
-                    .value_name("IP")
-                    .required(true)
-                        .help("IP of the DNS record")
-                ).arg(
                     Arg::with_name("host")
                     .value_name("HOST")
                     .required(true)
                         .help("Domain of the DNS record")
+                ).arg(
+                    Arg::with_name("ip")
+                    .value_name("IP")
+                    .required(true)
+                        .help("IP of the DNS record")
                 )
         )
         .subcommand(
@@ -90,18 +90,18 @@ pub fn parse_args() -> AppRunType {
     };
 
     if let Some(add) = app.subcommand_matches("add") {
-        let ip = add.value_of("ip").unwrap().to_string();
         let host = add.value_of("host").unwrap().to_string();
+        let ip = add.value_of("ip").unwrap().to_string();
         // check
-        if ip.parse::<IpAddr>().is_err() {
-            exit!("Cannot resolve '{}' to ip address", ip);
-        }
         if let Err(err) = Regex::new(&host) {
             exit!(
                 "Cannot resolve host '{}' to regular expression\n{:?}",
                 host,
                 err
             );
+        }
+        if ip.parse::<IpAddr>().is_err() {
+            exit!("Cannot resolve '{}' to ip address", ip);
         }
         return AppRunType::AddRecord { path, ip, host };
     }
