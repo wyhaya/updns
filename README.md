@@ -22,6 +22,9 @@ cargo install updns
 ## Start to use 🚀
 
 ```bash
+# Print Logs
+export LOG=info,warn,error
+
 updns
 # or
 updns -c /your/hosts

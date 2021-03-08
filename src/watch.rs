@@ -1,4 +1,4 @@
-use futures::{prelude::*, ready};
+use futures_util::{future::Future, ready, stream::Stream};
 use std::{
     path::{Path, PathBuf},
     pin::Pin,
@@ -63,8 +63,7 @@ impl Stream for Watch {
                     return Poll::Ready(Some(()));
                 }
             } else {
-                ready!(self.timer.poll_next_unpin(cx));
-
+                ready!(self.timer.poll_tick(cx));
                 self.state = Some(Box::pin(Self::modified(self.path.clone())));
             }
         }

@@ -1,16 +1,15 @@
 mod config;
 mod lib;
-mod logger;
 mod matcher;
 mod watch;
 
 use ace::App;
 use config::{Config, Hosts, MultipleInvalid, Parser};
 use dirs;
-use futures::prelude::*;
+use futures_util::StreamExt;
 use lazy_static::lazy_static;
 use lib::*;
-use log::{error, info, warn};
+use logs::{error, info, warn, LogConfig, LogError};
 use regex::Regex;
 use std::{
     env,
@@ -28,12 +27,10 @@ use tokio::{
 use watch::Watch;
 
 const CONFIG_FILE: [&str; 2] = [".updns", "config"];
-
+const WATCH_INTERVAL: Duration = Duration::from_millis(5000);
 const DEFAULT_BIND: &str = "0.0.0.0:53";
 const DEFAULT_PROXY: [&str; 2] = ["8.8.8.8:53", "1.1.1.1:53"];
 const DEFAULT_TIMEOUT: Duration = Duration::from_millis(2000);
-
-const WATCH_INTERVAL: Duration = Duration::from_millis(5000);
 
 lazy_static! {
     static ref PROXY: RwLock<Vec<SocketAddr>> = RwLock::new(Vec::new());
@@ -44,7 +41,7 @@ lazy_static! {
 macro_rules! exit {
     ($($arg:tt)*) => {
         {
-            eprintln!($($arg)*);
+            error!($($arg)*);
             std::process::exit(1)
         }
     };
@@ -52,7 +49,13 @@ macro_rules! exit {
 
 #[tokio::main]
 async fn main() {
-    logger::init().unwrap_or_else(|err| exit!("Log init failed:\n{:#?}", err));
+    LogConfig::from_env()
+        .unwrap_or_else(|err| match err {
+            LogError::NotPresent => LogConfig::default(),
+            LogError::NotUnicode => exit!("Log init failed: NotUnicode"),
+            LogError::FormatError(msg) => exit!("Log init failed: {}", msg),
+        })
+        .init();
 
     let app = App::new()
         .name(env!("CARGO_PKG_NAME"))
@@ -229,9 +232,8 @@ async fn force_get_config(file: &PathBuf) -> Config {
     config
 }
 
-async fn watch_config(p: PathBuf, t: Duration) {
-    let mut watch = Watch::new(&p, t).await;
-
+async fn watch_config(p: PathBuf, d: Duration) {
+    let mut watch = Watch::new(&p, d).await;
     while let Some(_) = watch.next().await {
         info!("Reload the configuration file: {:?}", &p);
         if let Ok(parser) = Parser::new(&p).await {
@@ -244,7 +246,7 @@ async fn watch_config(p: PathBuf, t: Duration) {
 }
 
 async fn run_server(addr: SocketAddr) {
-    let mut socket = match UdpSocket::bind(&addr).await {
+    let socket = match UdpSocket::bind(&addr).await {
         Ok(socket) => {
             info!("Start listening to '{}'", addr);
             socket
@@ -282,7 +284,7 @@ async fn proxy(buf: &[u8]) -> Result<Vec<u8>> {
     let duration = *TIMEOUT.read().await;
 
     for addr in proxy.iter() {
-        let mut socket = UdpSocket::bind(("0.0.0.0", 0)).await?;
+        let socket = UdpSocket::bind(("0.0.0.0", 0)).await?;
 
         let data: Result<Vec<u8>> = timeout(duration, async {
             socket.send_to(&buf, addr).await?;

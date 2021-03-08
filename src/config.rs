@@ -1,10 +1,9 @@
 use crate::matcher::Matcher;
-use futures::future::{BoxFuture, FutureExt};
+use futures_util::future::{BoxFuture, FutureExt};
 use lazy_static::lazy_static;
-use log::error;
+use logs::error;
 use regex::Regex;
 use std::{
-    borrow::Cow,
     net::{IpAddr, SocketAddr},
     path::{Path, PathBuf},
     result,
@@ -17,10 +16,6 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, Result},
 };
 
-lazy_static! {
-    static ref COMMENT_REGEX: Regex = Regex::new("#.*$").unwrap();
-}
-
 // Parse time format into Duration
 pub fn try_parse_duration(text: &str) -> result::Result<Duration, ()> {
     let numbers = "0123456789.".chars().collect::<Vec<char>>();
@@ -29,18 +24,16 @@ pub fn try_parse_duration(text: &str) -> result::Result<Duration, ()> {
         .position(|ch| !numbers.contains(&ch))
         .ok_or_else(|| ())?;
 
-    let time = &text[..i];
-    let unit = &text[i..];
-
+    let (time, unit) = text.split_at(i);
     if time.is_empty() {
         return Err(());
     }
-    let n = time.parse::<f64>().map_err(|_| ())?;
+    let n = time.parse::<f32>().map_err(|_| ())?;
     let ms = match unit {
-        "d" => Ok(24_f64 * 60_f64 * 60_f64 * 1000_f64 * n),
-        "h" => Ok(60_f64 * 60_f64 * 1000_f64 * n),
-        "m" => Ok(60_f64 * 1000_f64 * n),
-        "s" => Ok(1000_f64 * n),
+        "d" => Ok(24. * 60. * 60. * 1000. * n),
+        "h" => Ok(60. * 60. * 1000. * n),
+        "m" => Ok(60. * 1000. * n),
+        "s" => Ok(1000. * n),
         "ms" => Ok(n),
         _ => Err(()),
     }? as u64;
@@ -112,9 +105,7 @@ impl Hosts {
     }
 
     fn extend(&mut self, hosts: Hosts) {
-        for item in hosts.record {
-            self.record.push(item);
-        }
+        self.record.extend(hosts.record);
     }
 
     pub fn iter(&mut self) -> Iter<(Matcher, IpAddr)> {
@@ -248,8 +239,10 @@ impl Parser {
                 }
                 // remove comment
                 // example # ... -> example
-                let line: Cow<str> = COMMENT_REGEX.replace(line, "");
-                if line.trim().is_empty() {
+                lazy_static! {
+                    static ref COMMENT_REGEX: Regex = Regex::new("#.*$").unwrap();
+                }
+                if COMMENT_REGEX.replace(line, "").trim().is_empty() {
                     continue;
                 }
 
