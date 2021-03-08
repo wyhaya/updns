@@ -9,7 +9,7 @@ use config::{Config, Hosts, MultipleInvalid, Parser};
 use futures_util::StreamExt;
 use lazy_static::lazy_static;
 use lib::*;
-use logs::{error, info, warn, LogConfig, LogError};
+use logs::{error, info, warn};
 use std::{
     env,
     net::{IpAddr, SocketAddr},
@@ -49,14 +49,6 @@ macro_rules! exit {
 
 #[tokio::main]
 async fn main() {
-    LogConfig::from_env()
-        .unwrap_or_else(|err| match err {
-            LogError::NotPresent => LogConfig::default(),
-            LogError::NotUnicode => exit!("Log init failed: NotUnicode"),
-            LogError::FormatError(msg) => exit!("Log init failed: {}", msg),
-        })
-        .init();
-
     match parse_args() {
         AppRunType::AddRecord { path, ip, host } => {
             let mut parser = Parser::new(&path)
@@ -88,7 +80,7 @@ async fn main() {
             if status.success() {
                 force_get_config(&path).await;
             } else {
-                println!("'vim' exits with a non-zero status code: {:?}", status);
+                exit!("'vim' exits with a non-zero status code: {:?}", status);
             }
         }
         AppRunType::PrintPath { path } => {
@@ -160,7 +152,7 @@ async fn force_get_config(file: &PathBuf) -> Config {
 
 async fn watch_config(p: PathBuf, d: Duration) {
     let mut watch = Watch::new(&p, d).await;
-    while let Some(_) = watch.next().await {
+    while watch.next().await.is_some() {
         info!("Reload the configuration file: {:?}", &p);
         if let Ok(parser) = Parser::new(&p).await {
             if let Ok(config) = parser.parse().await {
@@ -177,7 +169,9 @@ async fn run_server(addr: SocketAddr) {
             info!("Start listening to '{}'", addr);
             socket
         }
-        Err(err) => exit!("Binding '{}' failed\n{:?}", addr, err),
+        Err(err) => {
+            exit!("Binding '{}' failed\n{:?}", addr, err)
+        }
     };
 
     loop {

@@ -608,7 +608,7 @@ impl DnsRecord {
                 }
             }
             DnsRecord::UNKNOWN { .. } => {
-                println!("Skipping record: {:?}", self);
+                logs::warn!("Skipping record: {:?}", self);
             }
         }
 

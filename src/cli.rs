@@ -1,7 +1,8 @@
 use crate::{config::try_parse_duration, exit, CONFIG_FILE, WATCH_INTERVAL};
 use clap::{crate_name, crate_version, App, AppSettings, Arg, SubCommand};
+use logs::LogConfig;
 use regex::Regex;
-use std::{net::IpAddr, path::PathBuf, time::Duration};
+use std::{net::IpAddr, path::PathBuf, str::FromStr, time::Duration};
 
 pub enum AppRunType {
     AddRecord {
@@ -57,7 +58,7 @@ pub fn parse_args() -> AppRunType {
             Arg::with_name("config")
                 .short("c")
                 .long("config")
-                .value_name("F")
+                .value_name("FILE")
                 .takes_value(true)
                 .help("Specify a config file"),
         )
@@ -65,11 +66,27 @@ pub fn parse_args() -> AppRunType {
             Arg::with_name("duration")
                 .short("d")
                 .long("duration")
-                .value_name("T")
+                .value_name("TIME")
                 .takes_value(true)
                 .help("Check the interval time of the configuration file\nformat: 1ms, 1s, 1m, 1h, 1d"),
         )
+        .arg(
+            Arg::with_name("log")
+                .short("l")
+                .long("log")
+                .value_name("FORMAT")
+                .takes_value(true)
+                .default_value("info,warn,error")
+                .help("Setting the log format\nformat: 'error,!info,debug' ..."),
+        )
         .get_matches();
+
+    LogConfig::from_str(app.value_of("log").unwrap())
+        .unwrap_or_else(|msg| {
+            LogConfig::enable_all().init();
+            exit!("Log init failed: {}", msg)
+        })
+        .init();
 
     let path = match app.value_of("config") {
         Some(s) => PathBuf::from(s),
