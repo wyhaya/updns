@@ -1,16 +1,15 @@
+mod cli;
 mod config;
 mod lib;
 mod matcher;
 mod watch;
 
-use ace::App;
+use cli::{parse_args, AppRunType};
 use config::{Config, Hosts, MultipleInvalid, Parser};
-use dirs;
 use futures_util::StreamExt;
 use lazy_static::lazy_static;
 use lib::*;
 use logs::{error, info, warn, LogConfig, LogError};
-use regex::Regex;
 use std::{
     env,
     net::{IpAddr, SocketAddr},
@@ -38,10 +37,11 @@ lazy_static! {
     static ref TIMEOUT: RwLock<Duration> = RwLock::new(DEFAULT_TIMEOUT);
 }
 
+#[macro_export]
 macro_rules! exit {
     ($($arg:tt)*) => {
         {
-            error!($($arg)*);
+            logs::error!($($arg)*);
             std::process::exit(1)
         }
     };
@@ -57,143 +57,69 @@ async fn main() {
         })
         .init();
 
-    let app = App::new()
-        .name(env!("CARGO_PKG_NAME"))
-        .version(env!("CARGO_PKG_VERSION"))
-        .cmd("add", "Add a DNS record")
-        .cmd("ls", "Print all configured DNS records")
-        .cmd("config", "Call 'vim' to edit the configuration file")
-        .cmd("path", "Print related directories")
-        .cmd("help", "Print help information")
-        .cmd("version", "Print version information")
-        .opt("-c", "Specify a config file")
-        .opt(
-            "-i",
-            vec![
-                "Check the interval time of the configuration file",
-                "format: 1ms, 1s, 1m, 1h, 1d",
-            ],
-        );
+    match parse_args() {
+        AppRunType::AddRecord { path, ip, host } => {
+            let mut parser = Parser::new(&path)
+                .await
+                .unwrap_or_else(|err| exit!("Failed to read config file {:?}\n{:?}", &path, err));
 
-    let config_path = match app.value("-c") {
-        Some(values) => {
-            if values.is_empty() {
-                exit!("'-c' missing a value: [FILE]");
+            if let Err(err) = parser.add(&host, &ip).await {
+                exit!("Add record failed\n{:?}", err);
             }
-            PathBuf::from(values[0])
         }
-        None => match dirs::home_dir() {
-            Some(p) => p.join(CONFIG_FILE[0]).join(CONFIG_FILE[1]),
-            None => exit!("Can't get home directory"),
-        },
-    };
+        AppRunType::PrintRecord { path } => {
+            let mut config = force_get_config(&path).await;
+            let n = config
+                .hosts
+                .iter()
+                .map(|(m, _)| m.to_string().len())
+                .fold(0, |a, b| a.max(b));
 
-    // Check profile interval
-    let watch_interval = app
-        .value("-i")
-        .map(|values| {
-            if values.is_empty() {
-                exit!("'-i' missing a value: : [1ms, 1s, 1m, 1h, 1d]");
+            for (host, ip) in config.hosts.iter() {
+                println!("{:domain$}    {}", host.to_string(), ip, domain = n);
             }
-            config::try_parse_duration(values[0]).unwrap_or_else(|_| {
-                exit!(
-                    "Cannot resolve '{}' to interval time, format: 1ms, 1s, 1m, 1h, 1d",
-                    &values[0]
-                )
-            })
-        })
-        .unwrap_or(WATCH_INTERVAL);
+        }
+        AppRunType::EditConfig { path } => {
+            let status = Command::new("vim")
+                .arg(&path)
+                .status()
+                .unwrap_or_else(|err| exit!("Call 'vim' command failed\n{:?}", err));
 
-    if let Some(cmd) = app.command() {
-        match cmd.as_str() {
-            "add" => {
-                let values = app.value("add").unwrap_or_default();
-                if values.len() != 2 {
-                    exit!("'add' value: [DOMAIN] [IP]");
-                }
-
-                // Check is positive
-                if let Err(err) = Regex::new(values[0]) {
-                    exit!(
-                        "Cannot resolve '{}' to regular expression\n{:?}",
-                        values[0],
-                        err
-                    );
-                }
-                if values[1].parse::<IpAddr>().is_err() {
-                    exit!("Cannot resolve '{}' to ip address", values[1]);
-                }
-
-                let mut parser = Parser::new(&config_path).await.unwrap_or_else(|err| {
-                    exit!("Failed to read config file {:?}\n{:?}", &config_path, err)
-                });
-
-                if let Err(err) = parser.add(values[0], values[1]).await {
-                    exit!("Add record failed\n{:?}", err);
-                }
+            if status.success() {
+                force_get_config(&path).await;
+            } else {
+                println!("'vim' exits with a non-zero status code: {:?}", status);
             }
-            "ls" => {
-                let mut config = force_get_config(&config_path).await;
+        }
+        AppRunType::PrintPath { path } => {
+            let binary = env::current_exe()
+                .unwrap_or_else(|err| exit!("Failed to get directory\n{:?}", err));
 
-                let n = config
-                    .hosts
-                    .iter()
-                    .map(|(m, _)| m.to_string().len())
-                    .fold(0, |a, b| a.max(b));
-
-                for (host, ip) in config.hosts.iter() {
-                    println!("{:domain$}    {}", host.to_string(), ip, domain = n);
-                }
+            println!("Binary: {}\nConfig: {}", binary.display(), path.display());
+        }
+        AppRunType::Run { path, duration } => {
+            let mut config = force_get_config(&path).await;
+            if config.bind.is_empty() {
+                warn!("Will bind the default address '{}'", DEFAULT_BIND);
+                config.bind.push(DEFAULT_BIND.parse().unwrap());
             }
-            "config" => {
-                let status = Command::new("vim")
-                    .arg(&config_path)
-                    .status()
-                    .unwrap_or_else(|err| exit!("Call 'vim' command failed\n{:?}", err));
-
-                if status.success() {
-                    force_get_config(&config_path).await;
-                } else {
-                    println!("'vim' exits with a non-zero status code: {:?}", status);
-                }
-            }
-            "path" => {
-                let binary = env::current_exe()
-                    .unwrap_or_else(|err| exit!("Failed to get directory\n{:?}", err));
-
-                println!(
-                    "Binary: {}\nConfig: {}",
-                    binary.display(),
-                    config_path.display()
+            if config.proxy.is_empty() {
+                warn!(
+                    "Will use the default proxy address '{}'",
+                    DEFAULT_PROXY.join(", ")
                 );
             }
-            "help" => app.print_help(),
-            "version" => app.print_version(),
-            _ => app.print_error_try("help"),
+
+            update_config(config.proxy, config.hosts, config.timeout).await;
+
+            // Run server
+            for addr in config.bind {
+                tokio::spawn(run_server(addr));
+            }
+            // watch config
+            watch_config(path, duration).await;
         }
-        return;
     }
-
-    let mut config = force_get_config(&config_path).await;
-    if config.bind.is_empty() {
-        warn!("Will bind the default address '{}'", DEFAULT_BIND);
-        config.bind.push(DEFAULT_BIND.parse().unwrap());
-    }
-    if config.proxy.is_empty() {
-        warn!(
-            "Will use the default proxy address '{}'",
-            DEFAULT_PROXY.join(", ")
-        );
-    }
-
-    update_config(config.proxy, config.hosts, config.timeout).await;
-
-    // Run server
-    for addr in config.bind {
-        tokio::spawn(run_server(addr));
-    }
-    // watch config
-    watch_config(config_path, watch_interval).await;
 }
 
 async fn update_config(mut proxy: Vec<SocketAddr>, hosts: Hosts, timeout: Option<Duration>) {
