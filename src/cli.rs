@@ -74,19 +74,16 @@ pub fn parse_args() -> AppRunType {
             Arg::with_name("log")
                 .short("l")
                 .long("log")
-                .value_name("FORMAT")
+                .value_name("...")
                 .takes_value(true)
-                .default_value("info,warn,error")
-                .help("Setting the log format\nformat: 'error,!info,debug' ..."),
+                .default_value("all,!trace,!debug")
+                .help("Set logs enable"),
         )
         .get_matches();
 
     LogConfig::from_str(app.value_of("log").unwrap())
-        .unwrap_or_else(|msg| {
-            LogConfig::enable_all().init();
-            exit!("Log init failed: {}", msg)
-        })
-        .init();
+        .unwrap_or_else(|msg| exit!("Log value error: '{}'", msg))
+        .build();
 
     let path = match app.value_of("config") {
         Some(s) => PathBuf::from(s),
