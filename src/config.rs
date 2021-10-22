@@ -22,7 +22,7 @@ pub fn try_parse_duration(text: &str) -> result::Result<Duration, ()> {
     let i = text
         .chars()
         .position(|ch| !numbers.contains(&ch))
-        .ok_or_else(|| ())?;
+        .ok_or(())?;
 
     let (time, unit) = text.split_at(i);
     if time.is_empty() {
@@ -257,7 +257,7 @@ impl Parser {
                     }};
                 }
 
-                let (key, value) = match Self::split(&line) {
+                let (key, value) = match Self::split(line) {
                     Some(d) => d,
                     None => invalid!(InvalidType::Other),
                 };

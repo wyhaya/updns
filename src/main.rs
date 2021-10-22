@@ -13,7 +13,7 @@ use logs::{error, info, warn};
 use std::{
     env,
     net::{IpAddr, SocketAddr},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::Command,
     time::Duration,
 };
@@ -136,7 +136,7 @@ async fn update_config(mut proxy: Vec<SocketAddr>, hosts: Hosts, timeout: Option
     }
 }
 
-async fn force_get_config(file: &PathBuf) -> Config {
+async fn force_get_config(file: &Path) -> Config {
     let parser = Parser::new(file)
         .await
         .unwrap_or_else(|err| exit!("Failed to read config file {:?}\n{:?}", file, err));
@@ -207,7 +207,7 @@ async fn proxy(buf: &[u8]) -> Result<Vec<u8>> {
         let socket = UdpSocket::bind(("0.0.0.0", 0)).await?;
 
         let data: Result<Vec<u8>> = timeout(duration, async {
-            socket.send_to(&buf, addr).await?;
+            socket.send_to(buf, addr).await?;
             let mut res = [0; 512];
             let len = socket.recv(&mut res).await?;
             Ok(res[..len].to_vec())
