@@ -296,3 +296,49 @@ impl Parser {
         .boxed()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::net::{Ipv4Addr, Ipv6Addr};
+
+    use super::*;
+
+    #[tokio::test]
+    async fn parse_config() -> Result<()> {
+        let config_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("test_data")
+            .join("config");
+
+        let parser = Parser::new(config_path).await?;
+
+        let config = parser.parse().await?;
+
+        assert!(config.invalid.is_empty(), "{:?}", config.invalid);
+
+        assert_eq!(
+            config.bind,
+            vec![SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 53)]
+        );
+
+        assert_eq!(
+            config.proxy,
+            vec![SocketAddr::new(IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8)), 53)]
+        );
+
+        let ip_addresses: Vec<_> = config.hosts.record.iter().map(|r| r.1).collect();
+        assert_eq!(
+            ip_addresses,
+            vec![
+                IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)),
+                IpAddr::V4(Ipv4Addr::new(2, 2, 2, 2)),
+                IpAddr::V4(Ipv4Addr::new(3, 3, 3, 3)),
+                IpAddr::V6(Ipv6Addr::UNSPECIFIED),
+                IpAddr::V4(Ipv4Addr::new(4, 4, 4, 4)),
+            ]
+        );
+
+        assert_eq!(config.timeout, Some(Duration::from_secs(2)));
+
+        Ok(())
+    }
+}
