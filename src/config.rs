@@ -1,8 +1,6 @@
 use crate::matcher::Matcher;
 use futures_util::future::{BoxFuture, FutureExt};
-use lazy_static::lazy_static;
 use logs::error;
-use regex::Regex;
 use std::{
     net::{IpAddr, SocketAddr},
     path::{Path, PathBuf},
@@ -233,16 +231,19 @@ impl Parser {
             let content = self.read_to_string().await?;
             let mut config = Config::new();
 
-            for (i, line) in content.lines().enumerate() {
+            for (i, mut line) in content.lines().enumerate() {
                 if line.is_empty() {
                     continue;
                 }
                 // remove comment
                 // example # ... -> example
-                lazy_static! {
-                    static ref COMMENT_REGEX: Regex = Regex::new("#.*$").unwrap();
+                if let Some(pos) = line.find('#') {
+                    line = &line[0..pos];
                 }
-                if COMMENT_REGEX.replace(line, "").trim().is_empty() {
+
+                line = line.trim();
+
+                if line.is_empty() {
                     continue;
                 }
 
@@ -325,7 +326,7 @@ mod tests {
             vec![SocketAddr::new(IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8)), 53)]
         );
 
-        let ip_addresses: Vec<_> = config.hosts.record.iter().map(|r| r.1).collect();
+        let ip_addresses: Vec<_> = config.hosts.record.iter().map(|(_, ip)| *ip).collect();
         assert_eq!(
             ip_addresses,
             vec![
