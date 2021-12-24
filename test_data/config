@@ -1,0 +1,14 @@
+bind     0.0.0.0:53      # Binding address
+proxy    8.8.8.8:53      # Proxy address
+timeout  2s              # Proxy timeout (format: 1ms, 1s, 1m, 1h, 1d)
+
+# Domain matching
+example.com              1.1.1.1
+*.example.com            2.2.2.2
+~^\w+\.example\.[a-z]+$  3.3.3.3
+
+# IPv6
+test.com                ::
+
+# Import from other file
+import ./other_hosts
