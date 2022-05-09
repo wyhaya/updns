@@ -83,7 +83,7 @@ pub fn parse_args() -> AppRunType {
 
     LogConfig::from_str(app.value_of("log").unwrap())
         .unwrap_or_else(|msg| exit!("Log value error: '{}'", msg))
-        .build();
+        .apply();
 
     let path = match app.value_of("config") {
         Some(s) => PathBuf::from(s),
