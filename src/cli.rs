@@ -1,8 +1,8 @@
 use crate::{config::try_parse_duration, exit, CONFIG_FILE, WATCH_INTERVAL};
 use clap::{crate_name, crate_version, App, AppSettings, Arg, SubCommand};
-use logs::LogConfig;
+use logs::Logs;
 use regex::Regex;
-use std::{net::IpAddr, path::PathBuf, str::FromStr, time::Duration};
+use std::{net::IpAddr, path::PathBuf, time::Duration};
 
 pub enum AppRunType {
     AddRecord {
@@ -76,14 +76,16 @@ pub fn parse_args() -> AppRunType {
                 .long("log")
                 .value_name("...")
                 .takes_value(true)
-                .default_value("all,!trace,!debug")
+                .default_value("info")
                 .help("Set logs enable"),
         )
         .get_matches();
 
-    LogConfig::from_str(app.value_of("log").unwrap())
-        .unwrap_or_else(|msg| exit!("Log value error: '{}'", msg))
-        .apply();
+    Logs::new()
+        .target(env!("CARGO_PKG_NAME"))
+        .level_from_str(app.value_of("log").unwrap())
+        .unwrap_or_else(|msg| exit!("Log value error: {:#?}", msg))
+        .init();
 
     let path = match app.value_of("config") {
         Some(s) => PathBuf::from(s),
