@@ -4,7 +4,7 @@ mod lib;
 mod matcher;
 mod watch;
 
-use cli::{parse_args, AppRunType};
+use cli::{parse_args, Args, RunType};
 use config::{Config, Hosts, MultipleInvalid, Parser};
 use futures_util::StreamExt;
 use lazy_static::lazy_static;
@@ -49,8 +49,9 @@ macro_rules! exit {
 
 #[tokio::main]
 async fn main() {
-    match parse_args() {
-        AppRunType::AddRecord { path, ip, host } => {
+    let Args { path, run } = parse_args();
+    match run {
+        RunType::AddRecord { ip, host } => {
             let mut parser = Parser::new(&path)
                 .await
                 .unwrap_or_else(|err| exit!("Failed to read config file {:?}\n{:?}", &path, err));
@@ -59,7 +60,7 @@ async fn main() {
                 exit!("Add record failed\n{:?}", err);
             }
         }
-        AppRunType::PrintRecord { path } => {
+        RunType::PrintRecord => {
             let mut config = force_get_config(&path).await;
             let n = config
                 .hosts
@@ -71,7 +72,7 @@ async fn main() {
                 println!("{:domain$}    {}", host.to_string(), ip, domain = n);
             }
         }
-        AppRunType::EditConfig { path } => {
+        RunType::EditConfig => {
             let status = Command::new("vim")
                 .arg(&path)
                 .status()
@@ -83,13 +84,13 @@ async fn main() {
                 exit!("'vim' exits with a non-zero status code: {:?}", status);
             }
         }
-        AppRunType::PrintPath { path } => {
+        RunType::PrintPath => {
             let binary = env::current_exe()
                 .unwrap_or_else(|err| exit!("Failed to get directory\n{:?}", err));
 
             println!("Binary: {}\nConfig: {}", binary.display(), path.display());
         }
-        AppRunType::Run { path, duration } => {
+        RunType::Start => {
             let mut config = force_get_config(&path).await;
             if config.bind.is_empty() {
                 warn!("Will bind the default address '{}'", DEFAULT_BIND);
@@ -109,7 +110,7 @@ async fn main() {
                 tokio::spawn(run_server(addr));
             }
             // watch config
-            watch_config(path, duration).await;
+            watch_config(path, WATCH_INTERVAL).await;
         }
     }
 }

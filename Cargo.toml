@@ -23,7 +23,7 @@ codegen-units = 1
 strip = "symbols"
 
 [dependencies]
-clap = "2.33.3"
+clap = { version = "3.2.22", features = ["cargo"] }
 dirs = "4.0.0"
 futures-util = "0.3.21"
 lazy_static = "1.4.0"
