@@ -1,7 +1,7 @@
 
 
 # updns
-[![GitHub Workflow Status](https://img.shields.io/github/workflow/status/wyhaya/updns/Build?style=flat-square)](https://github.com/wyhaya/updns/actions)
+[![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/wyhaya/updns/ci.yml?style=flat-square&branch=main)](https://github.com/wyhaya/updns/actions)
 [![Crates.io](https://img.shields.io/crates/v/updns.svg?style=flat-square)](https://crates.io/crates/updns)
 [![Crates.io](https://img.shields.io/crates/l/updns.svg?style=flat-square)](https://github.com/wyhaya/updns/blob/master/LICENSE)
 
