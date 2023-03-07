@@ -1,6 +1,5 @@
 mod cli;
 mod config;
-mod lib;
 mod matcher;
 mod watch;
 
@@ -8,7 +7,6 @@ use cli::{parse_args, Args, RunType};
 use config::{Config, Hosts, MultipleInvalid, Parser};
 use futures_util::StreamExt;
 use lazy_static::lazy_static;
-use lib::*;
 use logs::{error, info, warn};
 use std::{
     env,
@@ -23,6 +21,7 @@ use tokio::{
     sync::RwLock,
     time::timeout,
 };
+use updns::*;
 use watch::Watch;
 
 const CONFIG_FILE: [&str; 2] = [".updns", "config"];

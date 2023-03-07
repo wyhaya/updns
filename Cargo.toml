@@ -1,6 +1,6 @@
 [package]
 name = "updns"
-version = "0.1.6"
+version = "0.1.8"
 edition = "2021"
 
 authors = ["wyhaya <wyhaya@gmail.com>"]
@@ -27,6 +27,6 @@ clap = { version = "3.2.22", features = ["cargo"] }
 dirs = "4.0.0"
 futures-util = "0.3.21"
 lazy_static = "1.4.0"
-logs = "0.6.2"
+logs = "0.7.1"
 regex = "1.5.5"
 tokio = { version = "1.18.5", features = ["rt-multi-thread", "macros", "fs", "io-util", "net", "time", "sync"] }

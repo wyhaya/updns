@@ -34,6 +34,7 @@ pub fn parse_args() -> Args {
                 .long("log")
                 .value_name("LEVEL")
                 .takes_value(true)
+                .possible_values(["trace", "debug", "info", "warn", "error", "off"])
                 .default_value("info")
                 .help("Set log level"),
         )
@@ -63,7 +64,7 @@ pub fn parse_args() -> Args {
     Logs::new()
         .target(crate_name!())
         .level_from_str(level)
-        .unwrap_or_else(|msg| exit!("Log value error: {:#?}", msg))
+        .unwrap()
         .init();
 
     let path = match matches.value_of("config") {
