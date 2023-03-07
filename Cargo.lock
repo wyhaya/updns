@@ -445,7 +445,7 @@ checksum = "957e51f3646910546462e67d5f7599b9e4fb8acdd304b087a6494730f9eebf04"
 
 [[package]]
 name = "updns"
-version = "0.1.8"
+version = "0.1.7"
 dependencies = [
  "clap",
  "dirs",
