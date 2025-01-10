@@ -1,23 +1,13 @@
-
-
 # updns
-[![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/wyhaya/updns/ci.yml?style=flat-square&branch=main)](https://github.com/wyhaya/updns/actions)
-[![Crates.io](https://img.shields.io/crates/v/updns.svg?style=flat-square)](https://crates.io/crates/updns)
-[![Crates.io](https://img.shields.io/crates/l/updns.svg?style=flat-square)](https://github.com/wyhaya/updns/blob/master/LICENSE)
+
+> [!WARNING]  
+> * !!! This project contains severe bugs
+> * !!! No plans for fixes or patches
+> * !!! DO NOT use it in any environment
 
 ---
 
 updns is a simple DNS proxy server developed using `Rust`. You can intercept any domain name and return the ip you need
-
-## Install
-
-[Download](https://github.com/wyhaya/updns/releases) the binary from the release page
-
-Or use `cargo` to install
-
-```bash
-cargo install updns
-```
 
 ## Start to use 🚀
 
